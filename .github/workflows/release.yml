@@ -1,0 +1,37 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
+        with:
+          dotnet-version: 8.0.421
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
+        with:
+          version: 0.16.0
+      - shell: pwsh
+        run: ./eng/verify.ps1
+      - shell: pwsh
+        run: ./eng/audit-publication.ps1 -RequireLicense
+      - name: Publish release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $zip = Get-ChildItem artifacts/release/OFS-Loader-*-win-x64.zip -File -ErrorAction Stop
+          if (@($zip).Count -ne 1) { throw "Expected exactly one release ZIP." }
+          $checksum = Get-Item "$($zip.FullName).sha256" -ErrorAction Stop
+          gh release create '${{ github.ref_name }}' $zip.FullName $checksum.FullName `
+            --repo '${{ github.repository }}' `
+            --title "OFS Loader ${{ github.ref_name }}" `
+            --notes "Initial public release of the OFS Loader and in-game Mod Hub."

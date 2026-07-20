@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "rid": "win-x64",
+  "game": {
+    "version": "1.0.3",
+    "steamBuildId": "24301021",
+    "fingerprint": "8370257f4d60c7b8def58be8804d8724d76b95639baf4f199a7d54ef75d6e782"
+  }
+}

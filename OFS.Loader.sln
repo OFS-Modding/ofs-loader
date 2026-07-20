@@ -1,0 +1,57 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{0FBF303F-515D-44C3-9FB3-9A2946089691}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OFS.Loader.Core", "src\OFS.Loader.Core\OFS.Loader.Core.csproj", "{74AD0988-F2B1-4C66-A2C9-B4F2B9C18E6F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OFS.Runtime.Entry", "src\OFS.Runtime.Entry\OFS.Runtime.Entry.csproj", "{6C93C300-3169-46F3-9386-40C8245790D3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OFS.Manager.Cli", "src\OFS.Manager.Cli\OFS.Manager.Cli.csproj", "{52DA52B1-905A-47CF-AE07-40E52C38590F}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{FF2CB156-8210-4B37-8978-C2B27137DD80}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OFS.Sdk.SmokeTests", "tests\OFS.Sdk.SmokeTests\OFS.Sdk.SmokeTests.csproj", "{ACCF575A-9A5C-44D2-882D-5A8A863E3F83}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OFS.HttpsFixture", "tests\OFS.HttpsFixture\OFS.HttpsFixture.csproj", "{516FBC04-C9BF-4F3B-A0FE-B76617877970}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{74AD0988-F2B1-4C66-A2C9-B4F2B9C18E6F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{74AD0988-F2B1-4C66-A2C9-B4F2B9C18E6F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{74AD0988-F2B1-4C66-A2C9-B4F2B9C18E6F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{74AD0988-F2B1-4C66-A2C9-B4F2B9C18E6F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6C93C300-3169-46F3-9386-40C8245790D3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6C93C300-3169-46F3-9386-40C8245790D3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6C93C300-3169-46F3-9386-40C8245790D3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6C93C300-3169-46F3-9386-40C8245790D3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{52DA52B1-905A-47CF-AE07-40E52C38590F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{52DA52B1-905A-47CF-AE07-40E52C38590F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{52DA52B1-905A-47CF-AE07-40E52C38590F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{52DA52B1-905A-47CF-AE07-40E52C38590F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ACCF575A-9A5C-44D2-882D-5A8A863E3F83}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ACCF575A-9A5C-44D2-882D-5A8A863E3F83}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ACCF575A-9A5C-44D2-882D-5A8A863E3F83}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ACCF575A-9A5C-44D2-882D-5A8A863E3F83}.Release|Any CPU.Build.0 = Release|Any CPU
+		{516FBC04-C9BF-4F3B-A0FE-B76617877970}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{516FBC04-C9BF-4F3B-A0FE-B76617877970}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{516FBC04-C9BF-4F3B-A0FE-B76617877970}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{516FBC04-C9BF-4F3B-A0FE-B76617877970}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{74AD0988-F2B1-4C66-A2C9-B4F2B9C18E6F} = {0FBF303F-515D-44C3-9FB3-9A2946089691}
+		{6C93C300-3169-46F3-9386-40C8245790D3} = {0FBF303F-515D-44C3-9FB3-9A2946089691}
+		{52DA52B1-905A-47CF-AE07-40E52C38590F} = {0FBF303F-515D-44C3-9FB3-9A2946089691}
+		{ACCF575A-9A5C-44D2-882D-5A8A863E3F83} = {FF2CB156-8210-4B37-8978-C2B27137DD80}
+		{516FBC04-C9BF-4F3B-A0FE-B76617877970} = {FF2CB156-8210-4B37-8978-C2B27137DD80}
+	EndGlobalSection
+EndGlobal
