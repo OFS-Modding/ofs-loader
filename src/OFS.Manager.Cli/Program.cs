@@ -15,7 +15,7 @@ internal static class Program
         }
         if (args is ["--version"])
         {
-            Console.WriteLine(ModManifestValidator.CurrentSdkVersion.ToString(3));
+            Console.WriteLine(GetLoaderVersion());
             return 0;
         }
 
@@ -412,7 +412,7 @@ internal static class Program
     private static void PrintUsage()
     {
         Console.WriteLine("OFS Manager CLI");
-        Console.WriteLine($"Version {ModManifestValidator.CurrentSdkVersion.ToString(3)}");
+        Console.WriteLine($"Version {GetLoaderVersion()}");
         Console.WriteLine();
         Console.WriteLine("Usage:");
         Console.WriteLine("  ofs-manager scan [game-directory]");
@@ -443,6 +443,9 @@ internal static class Program
         Console.WriteLine("  ofs-manager profile disable <mod-id> [game-directory]");
         Console.WriteLine("  ofs-manager profile discard [game-directory]");
     }
+
+    private static string GetLoaderVersion() =>
+        typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "unknown";
 
     private sealed record BootstrapArtifacts(string Bootstrap, string Runtime);
 

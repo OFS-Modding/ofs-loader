@@ -6,11 +6,33 @@ installer for Ore Factory Squad mods.
 The loader consumes the versioned `OFS.Sdk` package. It does not contain SDK
 source or game files.
 
+## Install
+
+Download and run
+[`OFS-Installer-win-x64.exe`](https://github.com/OFS-Modding/ofs-loader/releases/latest/download/OFS-Installer-win-x64.exe).
+It locates Ore Factory Squad through Steam, verifies its embedded payload,
+installs or updates the loader, and synchronizes the signed official catalog.
+It never launches the game.
+
+Developer and automation modes:
+
+```powershell
+OFS-Installer-win-x64.exe --game-dir "D:\SteamLibrary\steamapps\common\Ore Factory Squad"
+OFS-Installer-win-x64.exe --status --game-dir "D:\path\to\game"
+OFS-Installer-win-x64.exe --scan --game-dir "D:\path\to\game"
+OFS-Installer-win-x64.exe --extract-only .\ofs-loader-dev
+OFS-Installer-win-x64.exe --manager --help
+```
+
+The versioned ZIP and PowerShell bootstrap installer remain available for
+advanced deployment and recovery workflows.
+
 ## Components
 
 - `native/OFS.Bootstrap`: native Windows bootstrap.
 - `src/OFS.Runtime.Entry`: managed runtime hosted in the game process.
 - `src/OFS.Manager.Cli`: scanning, installation, packages, profiles, and diagnostics.
+- `src/OFS.Installer`: verified single-executable user and developer installer.
 - `src/OFS.Loader.Core`: loader-owned build fingerprinting shared by runtime and manager.
 
 ## Build and test

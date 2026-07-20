@@ -6,12 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AssemblyName>OFS-Installer</AssemblyName>
+    <RootNamespace>OFS.Installer</RootNamespace>
   </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="OFS.Sdk" Version="0.1.0" />
-    <ProjectReference Include="..\..\src\OFS.Installer\OFS.Installer.csproj" />
-    <ProjectReference Include="..\..\src\OFS.Runtime.Entry\OFS.Runtime.Entry.csproj" />
+  <ItemGroup Condition="'$(InstallerPayload)' != ''">
+    <EmbeddedResource Include="$(InstallerPayload)" LogicalName="OFS.Loader.Payload.zip" />
   </ItemGroup>
 
 </Project>

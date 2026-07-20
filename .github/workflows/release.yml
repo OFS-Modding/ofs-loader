@@ -30,8 +30,11 @@ jobs:
         run: |
           $zip = Get-ChildItem artifacts/release/OFS-Loader-*-win-x64.zip -File -ErrorAction Stop
           if (@($zip).Count -ne 1) { throw "Expected exactly one release ZIP." }
-          $checksum = Get-Item "$($zip.FullName).sha256" -ErrorAction Stop
-          gh release create '${{ github.ref_name }}' $zip.FullName $checksum.FullName `
+          $zipChecksum = Get-Item "$($zip.FullName).sha256" -ErrorAction Stop
+          $installer = Get-Item artifacts/release/OFS-Installer-win-x64.exe -ErrorAction Stop
+          $installerChecksum = Get-Item "$($installer.FullName).sha256" -ErrorAction Stop
+          gh release create '${{ github.ref_name }}' `
+            $installer.FullName $installerChecksum.FullName $zip.FullName $zipChecksum.FullName `
             --repo '${{ github.repository }}' `
             --title "OFS Loader ${{ github.ref_name }}" `
-            --notes "Initial public release of the OFS Loader and in-game Mod Hub."
+            --notes "Download OFS-Installer-win-x64.exe for automatic installation. The ZIP is the advanced developer distribution."

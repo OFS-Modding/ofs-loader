@@ -14,8 +14,12 @@ $version = [string]$buildProperties.Project.PropertyGroup.Version
 $bundleName = "OFS-Loader-$version-win-x64"
 $zipPath = Join-Path $releaseDirectory "$bundleName.zip"
 $checksumPath = "$zipPath.sha256"
-if (-not (Test-Path -LiteralPath $zipPath) -or -not (Test-Path -LiteralPath $checksumPath)) {
-    throw "Release ZIP or checksum sidecar is missing."
+$installerPath = Join-Path $releaseDirectory "OFS-Installer-win-x64.exe"
+$installerChecksumPath = "$installerPath.sha256"
+foreach ($required in @($zipPath, $checksumPath, $installerPath, $installerChecksumPath)) {
+    if (-not (Test-Path -LiteralPath $required)) {
+        throw "Release artifact is missing: '$required'."
+    }
 }
 
 $sidecar = (Get-Content -LiteralPath $checksumPath -Raw).Trim()
@@ -25,6 +29,14 @@ if ($sidecar -notmatch '^(?<hash>[a-f0-9]{64})  (?<name>[^/\\]+\.zip)$') {
 $actualZipHash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($Matches.hash -ne $actualZipHash -or $Matches.name -ne [IO.Path]::GetFileName($zipPath)) {
     throw "Release checksum sidecar does not match the ZIP."
+}
+$installerSidecar = (Get-Content -LiteralPath $installerChecksumPath -Raw).Trim()
+if ($installerSidecar -notmatch '^(?<hash>[a-f0-9]{64})  OFS-Installer-win-x64\.exe$') {
+    throw "Installer checksum sidecar has invalid syntax."
+}
+$actualInstallerHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($Matches.hash -ne $actualInstallerHash) {
+    throw "Installer checksum sidecar does not match the executable."
 }
 
 $probeRoot = Join-Path $releaseDirectory ("release-smoke-" + [Guid]::NewGuid().ToString("N"))
@@ -117,6 +129,14 @@ try {
     if ($LASTEXITCODE -ne 0 -or $reportedVersion -ne $version) {
         throw "Released manager version '$reportedVersion' differs from '$version'."
     }
+    $installerVersion = (& $installerPath --version | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or $installerVersion -ne $version) {
+        throw "Released installer version '$installerVersion' differs from '$version'."
+    }
+    $delegatedVersion = (& $installerPath --quiet --manager --version | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or $delegatedVersion -ne $version) {
+        throw "Installer developer delegation did not expose OFS Manager $version."
+    }
 
     $steamApps = Join-Path $fixtureRoot "steamapps"
     $game = Join-Path $steamApps "common\Ore Factory Squad"
@@ -136,13 +156,19 @@ try {
 
     Push-Location $fixtureRoot
     try {
-        $installJson = & $manager bootstrap install $game | Out-String
-        if ($LASTEXITCODE -ne 0) { throw "Released manager bootstrap install failed." }
+        $installJson = & $installerPath --quiet --no-catalog-sync --game-dir $game | Out-String
+        if ($LASTEXITCODE -ne 0) { throw "Single-executable installer failed." }
         $install = $installJson | ConvertFrom-Json
         if ($install.bootstrap.state -ne "installed" -or
             -not (Test-Path -LiteralPath (Join-Path $game "version.dll")) -or
             -not (Test-Path -LiteralPath (Join-Path $game "OFS\runtime\OFS.Runtime.Entry.dll"))) {
             throw "Released manager did not install bootstrap/runtime from adjacent payload."
+        }
+
+        $installerStatus = (& $installerPath --quiet --status --game-dir $game | Out-String) |
+            ConvertFrom-Json
+        if ($LASTEXITCODE -ne 0 -or $installerStatus.state -ne "installed") {
+            throw "Single-executable installer status mode failed."
         }
 
         $status = (& $manager bootstrap status $game | Out-String) | ConvertFrom-Json
@@ -166,6 +192,7 @@ try {
 
     Write-Host "Release bundle manifest, checksums and clean install/uninstall verification passed."
     Write-Host "Release SHA-256: $actualZipHash"
+    Write-Host "Installer SHA-256: $actualInstallerHash"
 }
 finally {
     if (Test-Path -LiteralPath $probeRoot) {

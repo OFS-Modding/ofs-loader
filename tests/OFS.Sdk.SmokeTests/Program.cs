@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Net;
+using OFS.Installer;
 using OFS.Loader;
 using OFS.Runtime.Entry;
 using OFS.Sdk;
@@ -102,6 +103,29 @@ static async Task AssertThrowsAsync<TException>(Func<Task> action, string messag
     }
     throw new InvalidOperationException(message);
 }
+
+var defaultInstaller = InstallerOptions.Parse([]);
+Assert(defaultInstaller.ManagerArguments.SequenceEqual(["bootstrap", "install"]) &&
+       !defaultInstaller.SkipCatalogSync,
+    "Default installer options do not perform the automatic official install.");
+var explicitInstaller = InstallerOptions.Parse(
+    ["--quiet", "--no-catalog-sync", "--game-dir", "C:\\fixture"]);
+Assert(explicitInstaller.Quiet && explicitInstaller.SkipCatalogSync &&
+       explicitInstaller.ManagerArguments.SequenceEqual(
+           ["bootstrap", "install", "C:\\fixture"]),
+    "Explicit installer automation options were not preserved.");
+var delegatedInstaller = InstallerOptions.Parse(
+    ["--no-catalog-sync", "--manager", "profile", "list", "C:\\fixture"]);
+Assert(delegatedInstaller.SkipCatalogSync &&
+       delegatedInstaller.ManagerArguments.SequenceEqual(
+           ["profile", "list", "C:\\fixture"]),
+    "Installer developer delegation changed manager arguments.");
+AssertThrows<ArgumentException>(
+    () => InstallerOptions.Parse(["--status", "--scan"]),
+    "Installer accepted conflicting actions.");
+AssertThrows<ArgumentException>(
+    () => InstallerOptions.Parse(["--manager"]),
+    "Installer accepted an empty manager delegation.");
 
 Assert(ModVersion.TryParse("1.2.3", out var version) && version.ToString() == "1.2.3",
     "Stable version parsing failed.");

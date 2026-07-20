@@ -33,11 +33,15 @@ $token = [Guid]::NewGuid().ToString("N")
 $workRoot = Join-Path $outputRoot ".work-$token"
 $managerA = Join-Path $workRoot "manager-a"
 $managerB = Join-Path $workRoot "manager-b"
+$installerA = Join-Path $workRoot "installer-a"
+$installerB = Join-Path $workRoot "installer-b"
 $payload = Join-Path $workRoot "payload"
 $bundleName = "OFS-Loader-$version-win-x64"
 $zipPath = Join-Path $outputRoot "$bundleName.zip"
 $firstZip = Join-Path $workRoot "$bundleName.first.zip"
 $checksumPath = "$zipPath.sha256"
+$installerPath = Join-Path $outputRoot "OFS-Installer-win-x64.exe"
+$installerChecksumPath = "$installerPath.sha256"
 
 function Get-NormalizedRelativePath([string]$Base, [string]$Path) {
     $resolvedBase = [IO.Path]::GetFullPath($Base).TrimEnd(
@@ -149,10 +153,30 @@ try {
         "$($releaseHash.ToLowerInvariant())  $([IO.Path]::GetFileName($zipPath))`n",
         [Text.UTF8Encoding]::new($false))
 
+    & (Join-Path $PSScriptRoot "publish-installer.ps1") `
+        -PayloadArchive $zipPath -OutputDirectory $installerA
+    & (Join-Path $PSScriptRoot "publish-installer.ps1") `
+        -PayloadArchive $zipPath -OutputDirectory $installerB
+    $installerAPath = Join-Path $installerA "OFS-Installer.exe"
+    $installerBPath = Join-Path $installerB "OFS-Installer.exe"
+    $installerAHash = (Get-FileHash -LiteralPath $installerAPath -Algorithm SHA256).Hash
+    $installerBHash = (Get-FileHash -LiteralPath $installerBPath -Algorithm SHA256).Hash
+    if ($installerAHash -ne $installerBHash) {
+        throw "OFS Installer single-file publish is not deterministic: $installerAHash != $installerBHash."
+    }
+    Copy-Item -LiteralPath $installerAPath -Destination $installerPath -Force
+    [IO.File]::WriteAllText(
+        $installerChecksumPath,
+        "$($installerAHash.ToLowerInvariant())  $([IO.Path]::GetFileName($installerPath))`n",
+        [Text.UTF8Encoding]::new($false))
+
     [ordered]@{
         bundle = $zipPath
         bytes = (Get-Item -LiteralPath $zipPath).Length
         sha256 = $releaseHash.ToLowerInvariant()
+        installer = $installerPath
+        installerBytes = (Get-Item -LiteralPath $installerPath).Length
+        installerSha256 = $installerAHash.ToLowerInvariant()
         managerSha256 = $managerAHash.ToLowerInvariant()
         payloadFiles = $payloadFiles.Count + 2
     } | ConvertTo-Json
