@@ -1659,10 +1659,10 @@ internal static partial class UnityUiRuntime
         var state = report?.State.ToString().ToUpperInvariant() ?? "UNAVAILABLE";
         var entries = report?.Mods.Count ?? 0;
         var problems = report?.ProblemCount ?? 0;
-        SetSingleRowLabel(
+        SetRowColumns(
             _frameworkDiagnosticsRow,
-            $"LOADER v{typeof(UnityUiRuntime).Assembly.GetName().Version?.ToString(3)}    " +
-            $"{state}    {entries} {(entries == 1 ? "MOD" : "MODS")}    {problems} PROBLEMS");
+            $"LOADER v{typeof(UnityUiRuntime).Assembly.GetName().Version?.ToString(3)}    {state}",
+            $"{entries} {(entries == 1 ? "MOD" : "MODS")}    {problems} PROBLEMS");
     }
 
     private static void ApplyLastJoinFix()
