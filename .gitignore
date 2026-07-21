@@ -16,6 +16,7 @@ examples/OFS.CrashAndDriftMod/Assets/Bundles/Bundles
 examples/OFS.CrashAndDriftMod/Assets/Bundles/*.manifest
 examples/OFS.CrashAndDriftMod/Assets/Bundles/ofs-crash-and-drift-vfx
 .tools/
+.packages/
 .secrets/
 private.pem
 *.private.pem
