@@ -9,6 +9,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="OFS.Sdk" Version="0.1.0" />
+    <PackageReference Include="OFS.Sdk" Version="0.2.4" />
   </ItemGroup>
 </Project>

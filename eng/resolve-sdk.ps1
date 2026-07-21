@@ -1,5 +1,5 @@
 param(
-    [string]$Version = '0.1.0',
+    [string]$Version = '0.2.4',
     [string]$PackagePath = ''
 )
 
@@ -8,7 +8,7 @@ Set-StrictMode -Version Latest
 $repository = Split-Path -Parent $PSScriptRoot
 $packages = Join-Path $repository '.packages'
 $destination = Join-Path $packages "OFS.Sdk.$Version.nupkg"
-$expected = '7be96eb3496dfca4c71e5c3f5338e19e045c85389c768e9e71d0cdb22d2bc554'
+$expected = '5c9c5dd27c36ddf3218b9274654cc287e0b23bd41024d958e50078a1c7a5b6cf'
 
 New-Item -ItemType Directory -Path $packages -Force | Out-Null
 if (-not [string]::IsNullOrWhiteSpace($PackagePath)) {

@@ -331,7 +331,9 @@ internal sealed partial class GameContent
                 ReadInt(component.Pointer, "minCapacityPerRule"),
                 ReadBool(component.Pointer, "capacityByArea"),
                 ReadBool(component.Pointer, "equalDistributionAcrossRules"),
-                rules);
+                rules,
+                ReadBool(component.Pointer, "_isRestoringFromSave"),
+                ReadBool(component.Pointer, "_initialCountsCalculated"));
         }
 
         private void ReadRuleList(
@@ -739,6 +741,22 @@ internal sealed partial class GameContent
             public IReadOnlyList<MiningSpawnRuleDefinition> Rules =>
                 owner.DescribeComponent(component).Rules;
             public bool IsAlive => !_removed && owner.IsUnityAlive(component);
+            public bool IsRestoringFromSave
+            {
+                get
+                {
+                    EnsureAlive();
+                    return owner.ReadBool(component.Pointer, "_isRestoringFromSave");
+                }
+            }
+            public bool InitialCountsCalculated
+            {
+                get
+                {
+                    EnsureAlive();
+                    return owner.ReadBool(component.Pointer, "_initialCountsCalculated");
+                }
+            }
 
             public MiningAreaSpawnerDefinition Describe()
             {

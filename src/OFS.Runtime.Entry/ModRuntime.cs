@@ -498,6 +498,7 @@ internal static class ModRuntime
         world.Attach();
         var physics = new PhysicsApi(info.Id, unity, unsafeApi, logger);
         var npcs = new NpcApi(info.Id, world, unity, unsafeApi, events, logger);
+        var players = new PlayerApi(unsafeApi, unity);
         var interactions = new InteractionApi(info.Id, unsafeApi, events, logger);
         var entities = new EntityApi(info.Id, world, unity, interactions, events, logger);
         var network = new NetworkApi(
@@ -537,6 +538,7 @@ internal static class ModRuntime
             physics,
             entities,
             npcs,
+            players,
             interactions,
             dialogues,
             gameplayUi,
@@ -718,6 +720,7 @@ internal static class ModRuntime
         IModPhysicsApi Physics,
         IEntityApi Entities,
         INpcApi Npcs,
+        IPlayerApi Players,
         IInteractionApi Interactions,
         IDialogueApi Dialogues,
         IGameplayUiApi GameplayUi,

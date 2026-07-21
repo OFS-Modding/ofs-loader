@@ -117,6 +117,20 @@ internal sealed class UnityApi(IUnsafeIl2CppApi unsafeApi) : IUnityApi
         return new UnityObject(UnityUiRuntime.AddComponentPointer(gameObject.Pointer, klass));
     }
 
+    public UnityObject GetGameObject(UnityObject component)
+    {
+        EnsureMainThread();
+        EnsureNotNull(component);
+        var componentClass = RequireClass(
+            "UnityEngine.CoreModule.dll",
+            "UnityEngine",
+            "Component");
+        var getter = unsafeApi.FindMethod(componentClass, "get_gameObject", 0);
+        if (getter == 0)
+            throw new MissingMethodException("UnityEngine.Component.get_gameObject");
+        return new UnityObject(unsafeApi.RuntimeInvoke(getter, component.Pointer, 0));
+    }
+
     public string GetName(UnityObject instance)
     {
         EnsureMainThread();

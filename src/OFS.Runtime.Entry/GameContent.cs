@@ -27,6 +27,8 @@ internal sealed partial class GameContent(
     private readonly ItemSpawnProfileRegistry _itemSpawnProfiles = new(ownerId, unsafeApi);
     private readonly MiningAreaSpawnerRegistry _miningAreaSpawners =
         new(ownerId, unsafeApi, unity, isServerActive);
+    private readonly MiningNodeRegistry _miningNodes =
+        new(unsafeApi, unity, isServerActive);
 
     public IItemRegistry Items => _items;
     public IBuildingRegistry Buildings => _buildings;
@@ -40,6 +42,7 @@ internal sealed partial class GameContent(
     public IPropertyRegistry Properties => _properties;
     public IItemSpawnProfileRegistry ItemSpawnProfiles => _itemSpawnProfiles;
     public IMiningAreaSpawnerRegistry MiningAreaSpawners => _miningAreaSpawners;
+    public IMiningNodeRegistry MiningNodes => _miningNodes;
 
     internal void BeginTransaction()
     {
