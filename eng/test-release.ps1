@@ -103,6 +103,12 @@ try {
     if ($actualFiles.Count -ne $declaredPaths.Count + 2) {
         throw "Release contains undeclared files or an incomplete manifest."
     }
+    $internalExampleFiles = @($actualFiles | Where-Object {
+        $_.FullName -match '(?i)ofs[._-]example|sdk[._ -]?demo'
+    })
+    if ($internalExampleFiles.Count -ne 0) {
+        throw "Release contains internal SDK example content: '$($internalExampleFiles[0].FullName)'."
+    }
 
     $sumEntries = @{}
     foreach ($line in Get-Content -LiteralPath $sumsPath) {

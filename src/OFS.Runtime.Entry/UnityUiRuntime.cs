@@ -107,7 +107,7 @@ internal static partial class UnityUiRuntime
         new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, ModMenuPanel> ExternalPanelsById =
         new(StringComparer.OrdinalIgnoreCase);
-    private const float ContentCenterX = -365f;
+    private const float ContentCenterX = -420f;
     private const float ContentWidth = 940f;
 
     public static nint ButtonPressNative { get; private set; }
@@ -225,19 +225,19 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             SettingsView,
             "JOIN FIX    [NO MISMATCH]",
-            260f,
+            340f,
             ApplyLastJoinFix);
         _joinFixDetailsRow = CreateActionRow(
             _mainButtonTemplate,
             SettingsView,
             "NO MULTIPLAYER REMEDIATION IS PENDING",
-            185f,
+            265f,
             LogLastJoinFix);
         _joinFixCatalogRow = CreateActionRow(
             _mainButtonTemplate,
             SettingsView,
             "CATALOG STATUS",
-            110f,
+            190f,
             LogLastJoinFix);
         RefreshJoinFixView();
 
@@ -814,6 +814,7 @@ internal static partial class UnityUiRuntime
         PollBrowseSearchInput();
         PollExternalPanelInput();
         PollViewTabInput();
+        RefreshViewTabVisuals();
 
         const int Escape = 0x1B;
         const int RightMouseButton = 0x02;
@@ -859,6 +860,16 @@ internal static partial class UnityUiRuntime
     {
         _ = Native.GetAsyncKeyState(0x51); // Q
         _ = Native.GetAsyncKeyState(0x45); // E
+    }
+
+    private static void RefreshViewTabVisuals()
+    {
+        foreach (var tab in ViewTabObjects)
+        {
+            SetButtonVisualColor(
+                tab.Value,
+                tab.Key == _currentView ? AccentButtonColor : NeutralButtonColor);
+        }
     }
 
     private static void RefreshMainMenuLabelsWhenDue()
@@ -1196,11 +1207,11 @@ internal static partial class UnityUiRuntime
         _frameworkDiagnosticsRow = CreateActionButton(
             _mainButtonTemplate,
             InstalledView,
-            FormatFrameworkDiagnostics(),
-            new Vector2(ContentCenterX, 270f),
+            "LOADER",
+            new Vector2(ContentCenterX, 350f),
             new Vector2(ContentWidth, 54f),
             OpenRuntimeDiagnostics);
-        StaticViewLabels[_frameworkDiagnosticsRow] = FormatFrameworkDiagnostics();
+        RefreshFrameworkDiagnosticsRow();
 
         for (var index = 0; index < 4; ++index)
         {
@@ -1209,7 +1220,7 @@ internal static partial class UnityUiRuntime
                 _mainButtonTemplate,
                 InstalledView,
                 "INSTALLED MOD",
-                new Vector2(ContentCenterX, 200f - index * 70f),
+                new Vector2(ContentCenterX, 280f - index * 70f),
                 new Vector2(ContentWidth, 58f),
                 () => ActivateInstalledCard(cardIndex));
             InstalledCardRows.Add(row);
@@ -1219,14 +1230,14 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             InstalledView,
             "PREVIOUS",
-            new Vector2(ContentCenterX - 235f, -105f),
+            new Vector2(ContentCenterX - 235f, -25f),
             new Vector2(440f, 54f),
             () => MoveInstalledPage(-1));
         _installedNextButton = CreateActionButton(
             _mainButtonTemplate,
             InstalledView,
             "NEXT",
-            new Vector2(ContentCenterX + 235f, -105f),
+            new Vector2(ContentCenterX + 235f, -25f),
             new Vector2(440f, 54f),
             () => MoveInstalledPage(1));
 
@@ -1234,33 +1245,33 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             InstalledDetailView,
             "MOD DETAILS",
-            new Vector2(ContentCenterX, 250f),
+            new Vector2(ContentCenterX, 330f),
             new Vector2(ContentWidth, 66f));
         _installedDetailInfo = CreateActionButton(
             _mainButtonTemplate,
             InstalledDetailView,
             "DETAILS",
-            new Vector2(ContentCenterX, 125f),
+            new Vector2(ContentCenterX, 205f),
             new Vector2(ContentWidth, 150f));
         _installedDetailToggle = CreateActionButton(
             _mainButtonTemplate,
             InstalledDetailView,
             "DISABLE",
-            new Vector2(ContentCenterX - 235f, 0f),
+            new Vector2(ContentCenterX - 235f, 80f),
             new Vector2(440f, 58f),
             ToggleSelectedInstalledMod);
         _installedDetailUninstall = CreateActionButton(
             _mainButtonTemplate,
             InstalledDetailView,
             "UNINSTALL",
-            new Vector2(ContentCenterX + 235f, 0f),
+            new Vector2(ContentCenterX + 235f, 80f),
             new Vector2(440f, 58f),
             UninstallSelectedMod);
         _installedDetailBack = CreateActionButton(
             _mainButtonTemplate,
             InstalledDetailView,
             "BACK TO INSTALLED MODS",
-            new Vector2(ContentCenterX, -75f),
+            new Vector2(ContentCenterX, 5f),
             new Vector2(ContentWidth, 58f),
             CloseInstalledDetail);
         RefreshInstalledModRows();
@@ -1368,7 +1379,7 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             BrowseView,
             "SEARCH: ALL",
-            new Vector2(ContentCenterX - 160f, 270f),
+            new Vector2(ContentCenterX - 160f, 350f),
             new Vector2(620f, 54f),
             () =>
             {
@@ -1386,7 +1397,7 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             BrowseView,
             "0 MODS",
-            new Vector2(ContentCenterX + 320f, 270f),
+            new Vector2(ContentCenterX + 320f, 350f),
             new Vector2(280f, 54f));
         SetButtonColor(_browseSummaryRow, new Color(0f, 0f, 0f, 0f));
 
@@ -1397,18 +1408,18 @@ internal static partial class UnityUiRuntime
                 _mainButtonTemplate,
                 BrowseView,
                 "CATALOG ENTRY",
-                new Vector2(ContentCenterX, 200f - index * 70f),
+                new Vector2(ContentCenterX, 280f - index * 70f),
                 new Vector2(ContentWidth, 58f),
                 () => OpenBrowseCard(cardIndex));
             BrowseCardRows.Add(row);
-            RegisterThumbnailTarget(row);
+            RegisterThumbnailTarget(row, new Vector2(ContentCenterX - 425f, 280f - index * 70f));
         }
 
         _browsePreviousButton = CreateActionButton(
             _mainButtonTemplate,
             BrowseView,
             "PREVIOUS",
-            new Vector2(ContentCenterX - 235f, -105f),
+            new Vector2(ContentCenterX - 235f, -25f),
             new Vector2(440f, 54f),
             () =>
             {
@@ -1420,7 +1431,7 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             BrowseView,
             "NEXT",
-            new Vector2(ContentCenterX + 235f, -105f),
+            new Vector2(ContentCenterX + 235f, -25f),
             new Vector2(440f, 54f),
             () =>
             {
@@ -1433,29 +1444,30 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             BrowseDetailView,
             "MOD DETAILS",
-            new Vector2(ContentCenterX, 250f),
+            new Vector2(ContentCenterX, 330f),
             new Vector2(ContentWidth, 66f),
             () => { });
-        RegisterThumbnailTarget(_browseDetailTitle);
+        RegisterThumbnailTarget(_browseDetailTitle, new Vector2(ContentCenterX - 425f, 330f));
         _browseDetailInfo = CreateActionButton(
             _mainButtonTemplate,
             BrowseDetailView,
             "DETAILS",
-            new Vector2(ContentCenterX, 125f),
-            new Vector2(ContentWidth, 150f),
+            new Vector2(ContentCenterX, 195f),
+            new Vector2(ContentWidth, 190f),
             () => { });
+        SetLabelFontSize(_browseDetailInfo, 17f);
         _browseDetailInstall = CreateActionButton(
             _mainButtonTemplate,
             BrowseDetailView,
             "INSTALL",
-            new Vector2(ContentCenterX - 235f, 0f),
+            new Vector2(ContentCenterX - 235f, 30f),
             new Vector2(440f, 58f),
             InstallSelectedCatalogEntry);
         _browseDetailBack = CreateActionButton(
             _mainButtonTemplate,
             BrowseDetailView,
             "BACK TO RESULTS",
-            new Vector2(ContentCenterX + 235f, 0f),
+            new Vector2(ContentCenterX + 235f, 30f),
             new Vector2(440f, 58f),
             () =>
             {
@@ -1502,39 +1514,39 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             DiagnosticsView,
             "STARTUP DIAGNOSTICS",
-            new Vector2(ContentCenterX, 270f),
+            new Vector2(ContentCenterX, 350f),
             new Vector2(ContentWidth, 58f));
         _diagnosticTitle = CreateActionButton(
             _mainButtonTemplate,
             DiagnosticsView,
             "MANIFEST RESULT",
-            new Vector2(ContentCenterX, 195f),
+            new Vector2(ContentCenterX, 275f),
             new Vector2(ContentWidth, 64f));
         _diagnosticInfo = CreateActionButton(
             _mainButtonTemplate,
             DiagnosticsView,
             "DETAILS",
-            new Vector2(ContentCenterX, 75f),
+            new Vector2(ContentCenterX, 155f),
             new Vector2(ContentWidth, 145f));
         _diagnosticPrevious = CreateActionButton(
             _mainButtonTemplate,
             DiagnosticsView,
             "PREVIOUS",
-            new Vector2(ContentCenterX - 315f, -45f),
+            new Vector2(ContentCenterX - 315f, 35f),
             new Vector2(190f, 62f),
             () => MoveRuntimeDiagnostic(-1));
         _diagnosticBack = CreateActionButton(
             _mainButtonTemplate,
             DiagnosticsView,
             "BACK",
-            new Vector2(ContentCenterX, -45f),
+            new Vector2(ContentCenterX, 35f),
             new Vector2(260f, 62f),
             CloseRuntimeDiagnostics);
         _diagnosticNext = CreateActionButton(
             _mainButtonTemplate,
             DiagnosticsView,
             "NEXT",
-            new Vector2(ContentCenterX + 315f, -45f),
+            new Vector2(ContentCenterX + 315f, 35f),
             new Vector2(190f, 62f),
             () => MoveRuntimeDiagnostic(1));
     }
@@ -1641,14 +1653,16 @@ internal static partial class UnityUiRuntime
         SetLabel(_headerLabel, "Mods");
     }
 
-    private static string FormatFrameworkDiagnostics()
+    private static void RefreshFrameworkDiagnosticsRow()
     {
         var report = ModDiagnosticsRuntime.CurrentReport;
         var state = report?.State.ToString().ToUpperInvariant() ?? "UNAVAILABLE";
         var entries = report?.Mods.Count ?? 0;
         var problems = report?.ProblemCount ?? 0;
-        return $"LOADER v{typeof(UnityUiRuntime).Assembly.GetName().Version?.ToString(3)}    " +
-               $"[{state}]    {entries} MODS    {problems} PROBLEMS    VIEW DIAGNOSTICS";
+        SetSingleRowLabel(
+            _frameworkDiagnosticsRow,
+            $"LOADER v{typeof(UnityUiRuntime).Assembly.GetName().Version?.ToString(3)}    " +
+            $"{state}    {entries} {(entries == 1 ? "MOD" : "MODS")}    {problems} PROBLEMS");
     }
 
     private static void ApplyLastJoinFix()
@@ -1816,7 +1830,7 @@ internal static partial class UnityUiRuntime
             var row = BrowseCardRows[index];
             if (index < page.Count)
             {
-                SetRowColumns(
+                SetBrowseRowColumns(
                     row,
                     $"{page[index].Name.ToUpperInvariant()}    v{page[index].Version}",
                     $"[{GetBrowseState(page[index])}]");
@@ -1862,9 +1876,10 @@ internal static partial class UnityUiRuntime
             return;
         }
 
-        SetLabel(
+        SetBrowseRowColumns(
             _browseDetailTitle,
-            $"{selected.Name.ToUpperInvariant()}  v{selected.Version}");
+            $"{selected.Name.ToUpperInvariant()}  v{selected.Version}",
+            string.Empty);
         if (showDetail)
         {
             ApplyCatalogThumbnail(_browseDetailTitle, selected);
@@ -1879,7 +1894,7 @@ internal static partial class UnityUiRuntime
         var capabilities = selected.Capabilities.Count == 0
             ? "NONE"
             : string.Join(", ", selected.Capabilities);
-        SetLabel(
+        SetSingleRowLabel(
             _browseDetailInfo,
             $"{CompactCatalogText(selected.Summary, 105)}\n" +
             $"BY {CompactCatalogText(selected.Author, 35).ToUpperInvariant()}    " +
@@ -1901,27 +1916,27 @@ internal static partial class UnityUiRuntime
         SetActive(_browseDetailBack, showDetail);
     }
 
-    private static void RegisterThumbnailTarget(nint row)
+    private static void RegisterThumbnailTarget(nint row, Vector2 position)
     {
-        var iconObject = FindFirstDescendantWithComponent(row, _imageClass);
-        if (iconObject == 0)
+        var sourceIcon = FindFirstDescendantWithComponent(row, _imageClass);
+        if (sourceIcon == 0)
         {
             RuntimeLog.Write($"Catalog thumbnail target missing below '{GetObjectName(row)}'.");
             return;
         }
+        var iconObject = Instantiate(sourceIcon, GetTransform(_modsPanel));
+        SetObjectName(iconObject, $"OFS Thumbnail ({GetObjectName(row)})");
+        SetActive(sourceIcon, false);
+        SetRect(iconObject, new Vector2(0.5f, 0.5f), position, new Vector2(54f, 54f));
         var image = GetComponent(iconObject, _imageClass);
         var defaultSprite = InvokeReference(RequireMethod(_imageClass, "get_sprite", 0), image);
         var defaultColor = ReadColor(RequireMethod(_imageClass, "get_color", 0), image);
-        BrowseThumbnailTargets[row] = new ThumbnailTarget(image, defaultSprite, defaultColor);
-        SetActive(iconObject, true);
-        InvokeVoidWithVector2(
-            RequireMethod(_rectTransformClass, "set_sizeDelta", 1),
-            GetTransform(iconObject),
-            new Vector2(48f, 48f));
-        InvokeVoidWithVector2(
-            RequireMethod(_rectTransformClass, "set_anchoredPosition", 1),
-            GetTransform(iconObject),
-            new Vector2(-420f, 0f));
+        BrowseThumbnailTargets[row] = new ThumbnailTarget(
+            iconObject,
+            image,
+            defaultSprite,
+            defaultColor);
+        SetActive(iconObject, false);
     }
 
     private static void ApplyCatalogThumbnail(nint row, ModCatalogEntry entry)
@@ -1930,6 +1945,7 @@ internal static partial class UnityUiRuntime
         {
             return;
         }
+        SetActive(target.GameObject, true);
         var thumbnail = entry.Thumbnail;
         if (thumbnail is null)
         {
@@ -1951,6 +1967,7 @@ internal static partial class UnityUiRuntime
         if (BrowseThumbnailTargets.TryGetValue(row, out var target))
         {
             SetImageSprite(target.Image, target.DefaultSprite, target.DefaultColor);
+            SetActive(target.GameObject, false);
         }
     }
 
@@ -2087,6 +2104,19 @@ internal static partial class UnityUiRuntime
         }
     }
 
+    private static void SetButtonVisualColor(nint gameObject, Color color)
+    {
+        SetButtonColor(gameObject, color);
+        foreach (var imageObject in FindDescendantsWithComponent(gameObject, _imageClass))
+        {
+            var image = TryGetComponent(imageObject, _imageClass);
+            if (image != 0)
+            {
+                InvokeVoidWithColor(RequireMethod(_imageClass, "set_color", 1), image, color);
+            }
+        }
+    }
+
     private static nint FindFirstDescendantWithComponent(nint parent, nint componentClass)
     {
         foreach (var child in GetDirectChildren(GetTransform(parent)))
@@ -2218,9 +2248,31 @@ internal static partial class UnityUiRuntime
         SetActive(secondary, true);
     }
 
+    private static void SetBrowseRowColumns(nint row, string label, string value)
+    {
+        var primary = FindDescendant(row, "ButtonName_Text");
+        if (!SecondaryRowLabels.TryGetValue(row, out var secondary))
+        {
+            secondary = Instantiate(primary, GetTransform(row));
+            SetObjectName(secondary, "OFS Value Text");
+            SecondaryRowLabels[row] = secondary;
+        }
+        SetRect(primary, new Vector2(0.5f, 0.5f), new Vector2(45f, 0f), new Vector2(520f, 54f));
+        SetRect(secondary, new Vector2(0.5f, 0.5f), new Vector2(355f, 0f), new Vector2(230f, 54f));
+        SetLabel(primary, label);
+        SetLabel(secondary, value);
+        SetActive(secondary, value.Length != 0);
+    }
+
     private static void SetSingleRowLabel(nint row, string label)
     {
-        SetLabel(row, label);
+        var primary = FindDescendant(row, "ButtonName_Text");
+        SetRect(
+            primary,
+            new Vector2(0.5f, 0.5f),
+            new Vector2(0f, 0f),
+            new Vector2(ContentWidth - 40f, 200f));
+        SetLabel(primary, label);
         if (SecondaryRowLabels.TryGetValue(row, out var secondary))
         {
             SetActive(secondary, false);
@@ -2264,7 +2316,7 @@ internal static partial class UnityUiRuntime
         foreach (var tab in ViewTabObjects)
         {
             SetLabel(tab.Value, tab.Key.ToString().ToUpperInvariant());
-            SetButtonColor(
+            SetButtonVisualColor(
                 tab.Value,
                 tab.Key == view ? AccentButtonColor : NeutralButtonColor);
         }
@@ -2294,7 +2346,7 @@ internal static partial class UnityUiRuntime
                       !_diagnosticsOpen && _selectedInstalledModId is null;
         var detailVisible = _modsOpen && _currentView == ModsView.Installed &&
                             !_diagnosticsOpen && selected is not null;
-        SetLabel(_frameworkDiagnosticsRow, FormatFrameworkDiagnostics());
+        RefreshFrameworkDiagnosticsRow();
         for (var index = 0; index < InstalledCardRows.Count; ++index)
         {
             var row = InstalledCardRows[index];
@@ -2341,7 +2393,7 @@ internal static partial class UnityUiRuntime
             : string.Join(", ", mod.Manifest.Dependencies.Select(value => value.Id));
         SetLabel(_installedDetailTitle,
             $"{mod.Manifest.Name.ToUpperInvariant()}    v{mod.Manifest.Version}");
-        SetLabel(_installedDetailInfo,
+        SetSingleRowLabel(_installedDetailInfo,
             $"STATUS: {FormatInstalledStatus(mod, diagnostic)}    ID: {mod.Manifest.Id}\n" +
             $"AUTHOR: {CompactCatalogText(mod.Manifest.Author, 50).ToUpperInvariant()}\n" +
             $"DEPENDENCIES: {CompactCatalogText(dependencies, 90)}\n" +
@@ -2461,6 +2513,16 @@ internal static partial class UnityUiRuntime
         if (value == 0) return string.Empty;
         var length = Native.string_length(value);
         return Marshal.PtrToStringUni(Native.string_chars(value), length) ?? string.Empty;
+    }
+
+    private static void SetLabelFontSize(nint gameObject, float size)
+    {
+        var labelObject = FindTextLabelObject(gameObject);
+        var textComponent = GetComponent(labelObject, _textClass);
+        InvokeVoidWithFloat(
+            RequireMethod(_textClass, "set_fontSize", 1),
+            textComponent,
+            size);
     }
 
     private static nint FindTextLabelObject(nint gameObject)
@@ -2750,6 +2812,14 @@ internal static partial class UnityUiRuntime
         ThrowIfException(exception);
     }
 
+    private static unsafe void InvokeVoidWithFloat(nint method, nint instance, float value)
+    {
+        nint* arguments = stackalloc nint[1];
+        arguments[0] = (nint)(&value);
+        _ = Native.runtime_invoke(method, instance, (nint)arguments, out var exception);
+        ThrowIfException(exception);
+    }
+
     private static unsafe void InvokeVoidWithTwoInt32(
         nint method,
         nint instance,
@@ -2998,7 +3068,11 @@ internal static partial class UnityUiRuntime
         public bool Enabled { get; set; } = enabled;
     }
 
-    private sealed record ThumbnailTarget(nint Image, nint DefaultSprite, Color DefaultColor);
+    private sealed record ThumbnailTarget(
+        nint GameObject,
+        nint Image,
+        nint DefaultSprite,
+        Color DefaultColor);
 
     private enum ModsView
     {
