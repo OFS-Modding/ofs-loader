@@ -48,6 +48,7 @@ internal static partial class UnityUiRuntime
     private static readonly Dictionary<nint, ModsView> ViewTabs = new();
     private static readonly Dictionary<ModsView, nint> ViewTabObjects = new();
     private static readonly Dictionary<nint, Action> RowActions = new();
+    private static readonly Dictionary<nint, nint> SecondaryRowLabels = new();
     private static readonly List<nint> InstalledView = new();
     private static readonly List<nint> InstalledDetailView = new();
     private static readonly List<nint> InstalledCardRows = new();
@@ -73,6 +74,7 @@ internal static partial class UnityUiRuntime
     private static ModCatalogBrowser? _catalogBrowser;
     private static int _officialCatalogRefreshBusy;
     private static nint _browseSearchRow;
+    private static nint _browseSummaryRow;
     private static nint _browsePreviousButton;
     private static nint _browseNextButton;
     private static nint _browseDetailTitle;
@@ -105,6 +107,8 @@ internal static partial class UnityUiRuntime
         new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, ModMenuPanel> ExternalPanelsById =
         new(StringComparer.OrdinalIgnoreCase);
+    private const float ContentCenterX = -365f;
+    private const float ContentWidth = 940f;
 
     public static nint ButtonPressNative { get; private set; }
     public static nint EventSystemUpdateNative { get; private set; }
@@ -201,18 +205,15 @@ internal static partial class UnityUiRuntime
         HideDirectChildrenExcept(_modsPanel, "Header Bar");
         var header = FindDirectChild(_modsPanel, "Header Bar");
         var tabs = FindDirectChildOrNull(header, "Tabs");
-        if (tabs != 0)
+        if (tabs == 0)
         {
-            SetActive(tabs, false);
+            throw new InvalidOperationException("The Settings header does not expose its native tabs.");
         }
+        ConfigureNativeViewTabs(tabs);
         _headerLabel = FindDescendant(header, "Header_Text");
         SetLabel(_headerLabel, "Mods");
         var closeObject = FindDescendant(header, "Close");
         _closeButton = GetComponent(closeObject, _buttonClass);
-
-        CreateViewTab(_mainButtonTemplate, "INSTALLED", ModsView.Installed, -330f);
-        CreateViewTab(_mainButtonTemplate, "BROWSE", ModsView.Browse, 0f);
-        CreateViewTab(_mainButtonTemplate, "SETTINGS", ModsView.Settings, 330f);
 
         var installedMods = ModProfileStore.GetInstalledMods(ModRuntime.LoadedMods);
         BuildInstalledView();
@@ -224,19 +225,19 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             SettingsView,
             "JOIN FIX    [NO MISMATCH]",
-            145f,
+            260f,
             ApplyLastJoinFix);
         _joinFixDetailsRow = CreateActionRow(
             _mainButtonTemplate,
             SettingsView,
             "NO MULTIPLAYER REMEDIATION IS PENDING",
-            30f,
+            185f,
             LogLastJoinFix);
         _joinFixCatalogRow = CreateActionRow(
             _mainButtonTemplate,
             SettingsView,
             "CATALOG STATUS",
-            -85f,
+            110f,
             LogLastJoinFix);
         RefreshJoinFixView();
 
@@ -272,6 +273,7 @@ internal static partial class UnityUiRuntime
         ViewTabs.Clear();
         ViewTabObjects.Clear();
         RowActions.Clear();
+        SecondaryRowLabels.Clear();
         InstalledView.Clear();
         InstalledDetailView.Clear();
         InstalledCardRows.Clear();
@@ -291,6 +293,7 @@ internal static partial class UnityUiRuntime
         _cachedCatalog = null;
         _catalogBrowser = null;
         _browseSearchRow = 0;
+        _browseSummaryRow = 0;
         _browsePreviousButton = 0;
         _browseNextButton = 0;
         _browseDetailTitle = 0;
@@ -344,6 +347,7 @@ internal static partial class UnityUiRuntime
             SetActive(_modsPanel, true);
             SetActive(_inputInfoUi, false);
             _modsOpen = true;
+            DrainViewTabKeys();
             ShowView(ModsView.Installed);
             RuntimeLog.Write("Mods menu opened.");
             return true;
@@ -809,6 +813,7 @@ internal static partial class UnityUiRuntime
 
         PollBrowseSearchInput();
         PollExternalPanelInput();
+        PollViewTabInput();
 
         const int Escape = 0x1B;
         const int RightMouseButton = 0x02;
@@ -821,6 +826,39 @@ internal static partial class UnityUiRuntime
             else if (_modsOpen) CloseModsMenu();
             else _activeExternalPanel?.Close();
         }
+    }
+
+    private static void PollViewTabInput()
+    {
+        if (!_modsOpen || _browseSearchFocused || _dialogueOpen || _gameplayPanelOpen)
+        {
+            return;
+        }
+        const int Q = 0x51;
+        const int E = 0x45;
+        if ((Native.GetAsyncKeyState(Q) & 1) != 0)
+        {
+            CycleView(-1);
+        }
+        else if ((Native.GetAsyncKeyState(E) & 1) != 0)
+        {
+            CycleView(1);
+        }
+    }
+
+    private static void CycleView(int offset)
+    {
+        var views = new[] { ModsView.Installed, ModsView.Browse, ModsView.Settings };
+        var current = Array.IndexOf(views, _currentView);
+        var next = (current + offset + views.Length) % views.Length;
+        ShowView(views[next]);
+        RuntimeLog.Write($"Mods view changed to {views[next]} by keyboard tab navigation.");
+    }
+
+    private static void DrainViewTabKeys()
+    {
+        _ = Native.GetAsyncKeyState(0x51); // Q
+        _ = Native.GetAsyncKeyState(0x45); // E
     }
 
     private static void RefreshMainMenuLabelsWhenDue()
@@ -1112,15 +1150,45 @@ internal static partial class UnityUiRuntime
     private static bool IsSceneHandleAlive(int generation) =>
         generation == _sceneGeneration && _managerInstance != 0;
 
-    private static void CreateViewTab(nint template, string label, ModsView view, float x)
+    private static void ConfigureNativeViewTabs(nint tabs)
     {
-        var gameObject = Instantiate(template, GetTransform(_modsPanel));
-        SetObjectName(gameObject, $"OFS Tab ({label})");
-        SetRect(gameObject, new Vector2(0.5f, 0.5f), new Vector2(x, 335f), new Vector2(300f, 65f));
-        SetLabel(gameObject, label);
-        ViewTabs[GetComponent(gameObject, _buttonClass)] = view;
-        ViewTabObjects[view] = gameObject;
-        SetActive(gameObject, true);
+        SetActive(tabs, true);
+        var buttonCandidates = FindDescendantsWithComponent(tabs, _buttonClass)
+            .Where(gameObject =>
+                FindDescendantOrNull(gameObject, "ButtonName_Text") != 0 ||
+                FindFirstDescendantWithComponent(gameObject, _textClass) != 0)
+            .Distinct()
+            .ToArray();
+        var nativeLabels = new[] { "GRAPHICS", "AUDIO", "CONTROLS", "GAMEPLAY" };
+        var nativeTabs = nativeLabels
+            .Select(label => buttonCandidates.FirstOrDefault(gameObject => string.Equals(
+                GetLabel(gameObject).Trim(), label, StringComparison.OrdinalIgnoreCase)))
+            .Where(gameObject => gameObject != 0)
+            .ToArray();
+        var tabButtons = nativeTabs.Length >= 3
+            ? nativeTabs
+            : buttonCandidates;
+        if (tabButtons.Length < 3)
+        {
+            throw new InvalidOperationException(
+                $"The Settings header exposes only {tabButtons.Length} usable tab buttons.");
+        }
+
+        var views = new[] { ModsView.Installed, ModsView.Browse, ModsView.Settings };
+        for (var index = 0; index < views.Length; ++index)
+        {
+            var gameObject = tabButtons[index];
+            var view = views[index];
+            SetObjectName(gameObject, $"OFS Native Tab ({view})");
+            SetLabel(gameObject, view.ToString().ToUpperInvariant());
+            ViewTabs[GetComponent(gameObject, _buttonClass)] = view;
+            ViewTabObjects[view] = gameObject;
+            SetActive(gameObject, true);
+        }
+        for (var index = views.Length; index < tabButtons.Length; ++index)
+        {
+            SetActive(tabButtons[index], false);
+        }
     }
 
     private static void BuildInstalledView()
@@ -1129,8 +1197,8 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             InstalledView,
             FormatFrameworkDiagnostics(),
-            new Vector2(0f, 215f),
-            new Vector2(920f, 54f),
+            new Vector2(ContentCenterX, 270f),
+            new Vector2(ContentWidth, 54f),
             OpenRuntimeDiagnostics);
         StaticViewLabels[_frameworkDiagnosticsRow] = FormatFrameworkDiagnostics();
 
@@ -1141,8 +1209,8 @@ internal static partial class UnityUiRuntime
                 _mainButtonTemplate,
                 InstalledView,
                 "INSTALLED MOD",
-                new Vector2(0f, 145f - index * 72f),
-                new Vector2(920f, 60f),
+                new Vector2(ContentCenterX, 200f - index * 70f),
+                new Vector2(ContentWidth, 58f),
                 () => ActivateInstalledCard(cardIndex));
             InstalledCardRows.Add(row);
         }
@@ -1151,14 +1219,14 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             InstalledView,
             "PREVIOUS",
-            new Vector2(-235f, -190f),
+            new Vector2(ContentCenterX - 235f, -105f),
             new Vector2(440f, 54f),
             () => MoveInstalledPage(-1));
         _installedNextButton = CreateActionButton(
             _mainButtonTemplate,
             InstalledView,
             "NEXT",
-            new Vector2(235f, -190f),
+            new Vector2(ContentCenterX + 235f, -105f),
             new Vector2(440f, 54f),
             () => MoveInstalledPage(1));
 
@@ -1166,34 +1234,34 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             InstalledDetailView,
             "MOD DETAILS",
-            new Vector2(0f, 180f),
-            new Vector2(920f, 66f));
+            new Vector2(ContentCenterX, 250f),
+            new Vector2(ContentWidth, 66f));
         _installedDetailInfo = CreateActionButton(
             _mainButtonTemplate,
             InstalledDetailView,
             "DETAILS",
-            new Vector2(0f, 55f),
-            new Vector2(920f, 150f));
+            new Vector2(ContentCenterX, 125f),
+            new Vector2(ContentWidth, 150f));
         _installedDetailToggle = CreateActionButton(
             _mainButtonTemplate,
             InstalledDetailView,
             "DISABLE",
-            new Vector2(-235f, -70f),
+            new Vector2(ContentCenterX - 235f, 0f),
             new Vector2(440f, 58f),
             ToggleSelectedInstalledMod);
         _installedDetailUninstall = CreateActionButton(
             _mainButtonTemplate,
             InstalledDetailView,
             "UNINSTALL",
-            new Vector2(235f, -70f),
+            new Vector2(ContentCenterX + 235f, 0f),
             new Vector2(440f, 58f),
             UninstallSelectedMod);
         _installedDetailBack = CreateActionButton(
             _mainButtonTemplate,
             InstalledDetailView,
             "BACK TO INSTALLED MODS",
-            new Vector2(0f, -150f),
-            new Vector2(920f, 58f),
+            new Vector2(ContentCenterX, -75f),
+            new Vector2(ContentWidth, 58f),
             CloseInstalledDetail);
         RefreshInstalledModRows();
     }
@@ -1300,8 +1368,8 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             BrowseView,
             "SEARCH: ALL",
-            new Vector2(0f, 215f),
-            new Vector2(920f, 54f),
+            new Vector2(ContentCenterX - 160f, 270f),
+            new Vector2(620f, 54f),
             () =>
             {
                 _browseSearchFocused = !_browseSearchFocused;
@@ -1314,6 +1382,14 @@ internal static partial class UnityUiRuntime
                 RefreshBrowseView();
             });
 
+        _browseSummaryRow = CreateActionButton(
+            _mainButtonTemplate,
+            BrowseView,
+            "0 MODS",
+            new Vector2(ContentCenterX + 320f, 270f),
+            new Vector2(280f, 54f));
+        SetButtonColor(_browseSummaryRow, new Color(0f, 0f, 0f, 0f));
+
         for (var index = 0; index < 4; ++index)
         {
             var cardIndex = index;
@@ -1321,8 +1397,8 @@ internal static partial class UnityUiRuntime
                 _mainButtonTemplate,
                 BrowseView,
                 "CATALOG ENTRY",
-                new Vector2(0f, 145f - index * 72f),
-                new Vector2(920f, 60f),
+                new Vector2(ContentCenterX, 200f - index * 70f),
+                new Vector2(ContentWidth, 58f),
                 () => OpenBrowseCard(cardIndex));
             BrowseCardRows.Add(row);
             RegisterThumbnailTarget(row);
@@ -1332,7 +1408,7 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             BrowseView,
             "PREVIOUS",
-            new Vector2(-235f, -190f),
+            new Vector2(ContentCenterX - 235f, -105f),
             new Vector2(440f, 54f),
             () =>
             {
@@ -1344,7 +1420,7 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             BrowseView,
             "NEXT",
-            new Vector2(235f, -190f),
+            new Vector2(ContentCenterX + 235f, -105f),
             new Vector2(440f, 54f),
             () =>
             {
@@ -1357,29 +1433,29 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             BrowseDetailView,
             "MOD DETAILS",
-            new Vector2(0f, 180f),
-            new Vector2(920f, 66f),
+            new Vector2(ContentCenterX, 250f),
+            new Vector2(ContentWidth, 66f),
             () => { });
         RegisterThumbnailTarget(_browseDetailTitle);
         _browseDetailInfo = CreateActionButton(
             _mainButtonTemplate,
             BrowseDetailView,
             "DETAILS",
-            new Vector2(0f, 55f),
-            new Vector2(920f, 150f),
+            new Vector2(ContentCenterX, 125f),
+            new Vector2(ContentWidth, 150f),
             () => { });
         _browseDetailInstall = CreateActionButton(
             _mainButtonTemplate,
             BrowseDetailView,
             "INSTALL",
-            new Vector2(-235f, -90f),
+            new Vector2(ContentCenterX - 235f, 0f),
             new Vector2(440f, 58f),
             InstallSelectedCatalogEntry);
         _browseDetailBack = CreateActionButton(
             _mainButtonTemplate,
             BrowseDetailView,
             "BACK TO RESULTS",
-            new Vector2(235f, -90f),
+            new Vector2(ContentCenterX + 235f, 0f),
             new Vector2(440f, 58f),
             () =>
             {
@@ -1426,39 +1502,39 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             DiagnosticsView,
             "STARTUP DIAGNOSTICS",
-            new Vector2(0f, 205f),
-            new Vector2(760f, 58f));
+            new Vector2(ContentCenterX, 270f),
+            new Vector2(ContentWidth, 58f));
         _diagnosticTitle = CreateActionButton(
             _mainButtonTemplate,
             DiagnosticsView,
             "MANIFEST RESULT",
-            new Vector2(0f, 115f),
-            new Vector2(760f, 70f));
+            new Vector2(ContentCenterX, 195f),
+            new Vector2(ContentWidth, 64f));
         _diagnosticInfo = CreateActionButton(
             _mainButtonTemplate,
             DiagnosticsView,
             "DETAILS",
-            new Vector2(0f, -5f),
-            new Vector2(760f, 145f));
+            new Vector2(ContentCenterX, 75f),
+            new Vector2(ContentWidth, 145f));
         _diagnosticPrevious = CreateActionButton(
             _mainButtonTemplate,
             DiagnosticsView,
             "PREVIOUS",
-            new Vector2(-255f, -145f),
+            new Vector2(ContentCenterX - 315f, -45f),
             new Vector2(190f, 62f),
             () => MoveRuntimeDiagnostic(-1));
         _diagnosticBack = CreateActionButton(
             _mainButtonTemplate,
             DiagnosticsView,
             "BACK",
-            new Vector2(0f, -145f),
+            new Vector2(ContentCenterX, -45f),
             new Vector2(260f, 62f),
             CloseRuntimeDiagnostics);
         _diagnosticNext = CreateActionButton(
             _mainButtonTemplate,
             DiagnosticsView,
             "NEXT",
-            new Vector2(255f, -145f),
+            new Vector2(ContentCenterX + 315f, -45f),
             new Vector2(190f, 62f),
             () => MoveRuntimeDiagnostic(1));
     }
@@ -1513,7 +1589,7 @@ internal static partial class UnityUiRuntime
             SetLabel(_diagnosticInfo, "THE LOADER COULD NOT CREATE A DIAGNOSTIC REPORT.");
             SetActive(_diagnosticPrevious, false);
             SetActive(_diagnosticNext, false);
-            SetLabel(_headerLabel, "DIAGNOSTICS");
+            SetLabel(_headerLabel, "Mods");
             return;
         }
 
@@ -1562,7 +1638,7 @@ internal static partial class UnityUiRuntime
             SetLabel(_diagnosticNext, $"NEXT {_diagnosticIndex + 1}/{report.Mods.Count}");
         }
         SetLabel(_diagnosticBack, "BACK");
-        SetLabel(_headerLabel, "DIAGNOSTICS");
+        SetLabel(_headerLabel, "Mods");
     }
 
     private static string FormatFrameworkDiagnostics()
@@ -1571,8 +1647,8 @@ internal static partial class UnityUiRuntime
         var state = report?.State.ToString().ToUpperInvariant() ?? "UNAVAILABLE";
         var entries = report?.Mods.Count ?? 0;
         var problems = report?.ProblemCount ?? 0;
-        return $"OFS FRAMEWORK  v{ModManifestValidator.CurrentSdkVersion.ToString(3)}    [{state}]\n" +
-               $"STARTUP: {entries} RESULTS / {problems} PROBLEMS    SELECT FOR DETAILS";
+        return $"LOADER v{typeof(UnityUiRuntime).Assembly.GetName().Version?.ToString(3)}    " +
+               $"[{state}]    {entries} MODS    {problems} PROBLEMS    VIEW DIAGNOSTICS";
     }
 
     private static void ApplyLastJoinFix()
@@ -1723,13 +1799,16 @@ internal static partial class UnityUiRuntime
         var showDetail = browseVisible && selected is not null;
 
         SetActive(_browseSearchRow, showResults);
+        SetActive(_browseSummaryRow, showResults);
         var query = _catalogBrowser.Query.Trim();
         var searchText = query.Length == 0 ? "ALL" : query.ToUpperInvariant();
         var focus = _browseSearchFocused ? "_" : string.Empty;
+        SetLabel(_browseSearchRow, $"SEARCH MODS: {searchText}{focus}");
         SetLabel(
-            _browseSearchRow,
-            $"FIND: {searchText}{focus}    {_catalogBrowser.PageIndex + 1}/" +
-            $"{_catalogBrowser.PageCount}    {_catalogBrowser.MatchCount} MODS");
+            _browseSummaryRow,
+            $"{_catalogBrowser.MatchCount} " +
+            $"{(_catalogBrowser.MatchCount == 1 ? "MOD" : "MODS")}    " +
+            $"PAGE {_catalogBrowser.PageIndex + 1}/{_catalogBrowser.PageCount}");
 
         var page = _catalogBrowser.PageEntries;
         for (var index = 0; index < BrowseCardRows.Count; ++index)
@@ -1737,7 +1816,10 @@ internal static partial class UnityUiRuntime
             var row = BrowseCardRows[index];
             if (index < page.Count)
             {
-                SetLabel(row, FormatBrowseCard(page[index]));
+                SetRowColumns(
+                    row,
+                    $"{page[index].Name.ToUpperInvariant()}    v{page[index].Version}",
+                    $"[{GetBrowseState(page[index])}]");
                 if (showResults)
                 {
                     ApplyCatalogThumbnail(row, page[index]);
@@ -1750,7 +1832,7 @@ internal static partial class UnityUiRuntime
             }
             else if (index == 0 && page.Count == 0)
             {
-                SetLabel(row, _cachedCatalog?.Entries.Count == 0
+                SetSingleRowLabel(row, _cachedCatalog?.Entries.Count == 0
                     ? _cachedCatalog.Status
                     : "NO MODS MATCH THIS SEARCH");
                 ResetCatalogThumbnail(row);
@@ -1831,10 +1913,15 @@ internal static partial class UnityUiRuntime
         var defaultSprite = InvokeReference(RequireMethod(_imageClass, "get_sprite", 0), image);
         var defaultColor = ReadColor(RequireMethod(_imageClass, "get_color", 0), image);
         BrowseThumbnailTargets[row] = new ThumbnailTarget(image, defaultSprite, defaultColor);
+        SetActive(iconObject, true);
         InvokeVoidWithVector2(
             RequireMethod(_rectTransformClass, "set_sizeDelta", 1),
             GetTransform(iconObject),
-            new Vector2(58f, 58f));
+            new Vector2(48f, 48f));
+        InvokeVoidWithVector2(
+            RequireMethod(_rectTransformClass, "set_anchoredPosition", 1),
+            GetTransform(iconObject),
+            new Vector2(-420f, 0f));
     }
 
     private static void ApplyCatalogThumbnail(nint row, ModCatalogEntry entry)
@@ -1987,7 +2074,8 @@ internal static partial class UnityUiRuntime
     }
 
     private static readonly Color AccentButtonColor = new(0.68f, 0.44f, 0.24f, 1f);
-    private static readonly Color NeutralButtonColor = new(0.32f, 0.32f, 0.32f, 1f);
+    private static readonly Color NeutralButtonColor = new(0.07f, 0.07f, 0.07f, 0.96f);
+    private static readonly Color ContentButtonColor = new(0.02f, 0.02f, 0.02f, 0.78f);
     private static readonly Color WarningButtonColor = new(0.66f, 0.25f, 0.20f, 1f);
 
     private static void SetButtonColor(nint gameObject, Color color)
@@ -2016,6 +2104,23 @@ internal static partial class UnityUiRuntime
         return 0;
     }
 
+    private static IEnumerable<nint> FindDescendantsWithComponent(
+        nint parent,
+        nint componentClass)
+    {
+        foreach (var child in GetDirectChildren(GetTransform(parent)))
+        {
+            if (TryGetComponent(child, componentClass) != 0)
+            {
+                yield return child;
+            }
+            foreach (var nested in FindDescendantsWithComponent(child, componentClass))
+            {
+                yield return nested;
+            }
+        }
+    }
+
     private static HttpClient CreateCatalogThumbnailHttpClient()
     {
         var client = new HttpClient(new HttpClientHandler
@@ -2032,12 +2137,11 @@ internal static partial class UnityUiRuntime
         return client;
     }
 
-    private static string FormatBrowseCard(ModCatalogEntry entry)
+    private static string GetBrowseState(ModCatalogEntry entry)
     {
-        var state = BrowseInstallStates.TryGetValue(entry.Id, out var installState)
+        return BrowseInstallStates.TryGetValue(entry.Id, out var installState)
             ? installState
             : BrowseInstalledIds.Contains(entry.Id) ? "INSTALLED" : "AVAILABLE";
-        return $"{entry.Name.ToUpperInvariant()}    v{entry.Version}    [{state}]";
     }
 
     private static string CompactCatalogText(string? value, int maximumLength)
@@ -2073,8 +2177,8 @@ internal static partial class UnityUiRuntime
             template,
             viewObjects,
             label,
-            new Vector2(0f, y),
-            new Vector2(760f, 82f),
+            new Vector2(ContentCenterX, y),
+            new Vector2(ContentWidth, 62f),
             action);
 
     private static nint CreateActionButton(
@@ -2089,11 +2193,47 @@ internal static partial class UnityUiRuntime
         SetObjectName(gameObject, $"OFS Row ({label})");
         SetRect(gameObject, new Vector2(0.5f, 0.5f), position, size);
         SetLabel(gameObject, label);
+        SetButtonColor(gameObject, ContentButtonColor);
+        SetActionButtonIconVisible(gameObject, false);
         RowActions[GetComponent(gameObject, _buttonClass)] = action ??
             (() => RuntimeLog.Write($"Mods row selected: {label}."));
         viewObjects.Add(gameObject);
         SetActive(gameObject, false);
         return gameObject;
+    }
+
+    private static void SetRowColumns(nint row, string label, string value)
+    {
+        var primary = FindDescendant(row, "ButtonName_Text");
+        if (!SecondaryRowLabels.TryGetValue(row, out var secondary))
+        {
+            secondary = Instantiate(primary, GetTransform(row));
+            SetObjectName(secondary, "OFS Value Text");
+            SecondaryRowLabels[row] = secondary;
+        }
+        SetRect(primary, new Vector2(0.5f, 0.5f), new Vector2(-170f, 0f), new Vector2(540f, 54f));
+        SetRect(secondary, new Vector2(0.5f, 0.5f), new Vector2(300f, 0f), new Vector2(320f, 54f));
+        SetLabel(primary, label);
+        SetLabel(secondary, value);
+        SetActive(secondary, true);
+    }
+
+    private static void SetSingleRowLabel(nint row, string label)
+    {
+        SetLabel(row, label);
+        if (SecondaryRowLabels.TryGetValue(row, out var secondary))
+        {
+            SetActive(secondary, false);
+        }
+    }
+
+    private static void SetActionButtonIconVisible(nint row, bool visible)
+    {
+        var iconObject = FindFirstDescendantWithComponent(row, _imageClass);
+        if (iconObject != 0)
+        {
+            SetActive(iconObject, visible);
+        }
     }
 
     private static void ShowView(ModsView view)
@@ -2160,12 +2300,19 @@ internal static partial class UnityUiRuntime
             var row = InstalledCardRows[index];
             if (index < page.Length)
             {
-                SetLabel(row, FormatInstalledMod(page[index]));
+                var mod = page[index];
+                var manifestPath = Path.GetFullPath(Path.Combine(mod.Directory, "manifest.json"));
+                var diagnostic = ModDiagnosticsRuntime.CurrentReport?.Mods.FirstOrDefault(value =>
+                    string.Equals(value.ManifestPath, manifestPath, StringComparison.OrdinalIgnoreCase));
+                SetRowColumns(
+                    row,
+                    $"{mod.Manifest.Name.ToUpperInvariant()}    v{mod.Manifest.Version}",
+                    $"[{FormatInstalledStatus(mod, diagnostic)}]");
                 SetActive(row, visible);
             }
             else if (index == 0 && installed.Count == 0)
             {
-                SetLabel(row, "NO MODS INSTALLED");
+                SetSingleRowLabel(row, "NO MODS INSTALLED");
                 SetActive(row, visible);
             }
             else SetActive(row, false);
@@ -2211,15 +2358,6 @@ internal static partial class UnityUiRuntime
             _installedDetailUninstall,
             _confirmInstalledUninstall ? WarningButtonColor : NeutralButtonColor);
         SetLabel(_installedDetailBack, "BACK TO INSTALLED MODS");
-    }
-
-    private static string FormatInstalledMod(InstalledModState mod)
-    {
-        var manifestPath = Path.GetFullPath(Path.Combine(mod.Directory, "manifest.json"));
-        var diagnostic = ModDiagnosticsRuntime.CurrentReport?.Mods.FirstOrDefault(value =>
-            string.Equals(value.ManifestPath, manifestPath, StringComparison.OrdinalIgnoreCase));
-        return $"{mod.Manifest.Name.ToUpperInvariant()}    v{mod.Manifest.Version}    " +
-               $"[{FormatInstalledStatus(mod, diagnostic)}]";
     }
 
     private static string FormatInstalledStatus(
@@ -2306,16 +2444,38 @@ internal static partial class UnityUiRuntime
 
     private static void SetLabel(nint gameObject, string text)
     {
-        var labelObject = string.Equals(GetObjectName(gameObject), "ButtonName_Text", StringComparison.Ordinal)
-            || string.Equals(GetObjectName(gameObject), "Header_Text", StringComparison.Ordinal)
-            ? gameObject
-            : FindDescendant(gameObject, "ButtonName_Text");
+        var labelObject = FindTextLabelObject(gameObject);
         var textComponent = GetComponent(labelObject, _textClass);
         var managedText = Native.string_new(text);
         InvokeVoidWithObject(
             RequireMethod(_textClass, "set_text", 1),
             textComponent,
             managedText);
+    }
+
+    private static string GetLabel(nint gameObject)
+    {
+        var labelObject = FindTextLabelObject(gameObject);
+        var textComponent = GetComponent(labelObject, _textClass);
+        var value = InvokeReference(RequireMethod(_textClass, "get_text", 0), textComponent);
+        if (value == 0) return string.Empty;
+        var length = Native.string_length(value);
+        return Marshal.PtrToStringUni(Native.string_chars(value), length) ?? string.Empty;
+    }
+
+    private static nint FindTextLabelObject(nint gameObject)
+    {
+        var labelObject = TryGetComponent(gameObject, _textClass) != 0
+            ? gameObject
+            : FindDescendantOrNull(gameObject, "ButtonName_Text");
+        if (labelObject == 0)
+        {
+            labelObject = FindFirstDescendantWithComponent(gameObject, _textClass);
+        }
+        return labelObject != 0
+            ? labelObject
+            : throw new InvalidOperationException(
+                $"GameObject '{GetObjectName(gameObject)}' has no text label.");
     }
 
     private static void SetObjectName(nint instance, string name)

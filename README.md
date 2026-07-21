@@ -58,6 +58,9 @@ temporary network failure during installation does not require a repair step.
 The Mod Hub lists installed and catalog mods in separate views. Package
 installation, enable/disable changes, and confirmed uninstallation are staged
 safely in-game and applied before mod discovery on the next restart.
+Its header reuses the game's native Settings tabs, including Q/E navigation,
+while search, result counts, and mod rows remain distinct controls in the
+Settings-style content column.
 
 The official endpoint is
 `https://ofs-modding.github.io/ofs-mod-catalog/catalog.signed.json`. Downloads
