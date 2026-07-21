@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" width="128" alt="OFS-Modding">
+</p>
+
 # OFS Loader
 
 Native bootstrap, managed runtime, in-game Mod Hub, command-line manager, and
