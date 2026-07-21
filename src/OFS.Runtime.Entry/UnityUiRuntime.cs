@@ -694,6 +694,12 @@ internal static partial class UnityUiRuntime
 
     internal static nint GetButtonPointer(nint gameObject) => GetComponent(gameObject, _buttonClass);
 
+    internal static nint GetGameObjectForSdk(nint component) =>
+        InvokeReference(RequireMethod(_componentClass, "get_gameObject", 0), component);
+
+    internal static void SetLabelForSdk(nint gameObject, string text) =>
+        SetLabel(gameObject, text);
+
     internal static nint AddComponentPointer(nint gameObject, nint componentClass)
     {
         var type = Native.class_get_type(componentClass);

@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="OFS.Sdk" Version="0.2.4" />
+    <PackageReference Include="OFS.Sdk" Version="0.3.0" />
     <ProjectReference Include="..\..\src\OFS.Installer\OFS.Installer.csproj" />
     <ProjectReference Include="..\..\src\OFS.Runtime.Entry\OFS.Runtime.Entry.csproj" />
   </ItemGroup>

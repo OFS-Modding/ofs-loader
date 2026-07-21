@@ -188,6 +188,34 @@ internal sealed class NpcApi(
             .ToArray();
     }
 
+    public IReadOnlyList<VanillaHiredEmployeeSnapshot> FindHiredVanillaEmployees(
+        bool idleOnly = false)
+    {
+        EnsureMainThread();
+        return _vanillaEmployee?.FindHired(idleOnly) ?? [];
+    }
+
+    public void AssignHiredVanillaEmployeeServer(string employeeId, string assignmentId)
+    {
+        EnsureMainThread();
+        ArgumentException.ThrowIfNullOrWhiteSpace(employeeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(assignmentId);
+        if (_vanillaEmployee is null)
+            throw new NotSupportedException(
+                "EmployeeManager integration is unavailable for this game build.");
+        _vanillaEmployee.AssignServer(employeeId, assignmentId);
+    }
+
+    public void ReleaseHiredVanillaEmployeeServer(string employeeId)
+    {
+        EnsureMainThread();
+        ArgumentException.ThrowIfNullOrWhiteSpace(employeeId);
+        if (_vanillaEmployee is null)
+            throw new NotSupportedException(
+                "EmployeeManager integration is unavailable for this game build.");
+        _vanillaEmployee.ReleaseServer(employeeId);
+    }
+
     public VanillaHiredEmployeeSnapshot HireVanillaEmployeeServer(
         VanillaEmployeeHireDefinition definition)
     {
@@ -493,6 +521,8 @@ internal sealed class NpcApi(
         private readonly nint _employeeManagerRemoveFired;
         private readonly nint _employeeManagerRpcHired;
         private readonly nint _employeeManagerOnEmployeeHired;
+        private readonly nint _employeeManagerAssignOffsite;
+        private readonly nint _employeeManagerReleaseOffsite;
         private readonly nint _minerSlotGetVehicle;
         private readonly nint _minerVehicleServerOccupy;
         private readonly nint _minerVehicleServerVacate;
@@ -612,6 +642,16 @@ internal sealed class NpcApi(
                 api, _employeeManagerClass, "RpcOnEmployeeHired", ["HiredEmployeeData"]);
             _employeeManagerOnEmployeeHired = RequireField(
                 api, _employeeManagerClass, "onEmployeeHired", "EmployeeManager");
+            _employeeManagerAssignOffsite = RequireMethod(
+                api,
+                _employeeManagerClass,
+                "ServerSetEmployeeOnOffsiteContract",
+                ["System.String", "System.String"]);
+            _employeeManagerReleaseOffsite = RequireMethod(
+                api,
+                _employeeManagerClass,
+                "ServerReleaseEmployeeFromOffsiteContract",
+                ["System.String"]);
             var minerSlotClass = RequireClass(
                 api, "Assembly-CSharp.dll", string.Empty, "MinerSlot");
             _minerSlotGetVehicle = RequireMethod(api, minerSlotClass, "get_Vehicle", 0);
@@ -783,6 +823,55 @@ internal sealed class NpcApi(
             return manager != 0 && TryGetHired(manager, qualifiedId, out employee, out _);
         }
 
+        internal IReadOnlyList<VanillaHiredEmployeeSnapshot> FindHired(bool idleOnly)
+        {
+            var manager = _api.RuntimeInvoke(_employeeManagerGetInstance, 0, 0);
+            if (manager == 0) return [];
+            var list = RequireHiredEmployees(manager);
+            var listClass = _api.GetObjectClass(list);
+            var getCount = RequireMethod(_api, listClass, "get_Count", 0);
+            var getItem = RequireMethod(_api, listClass, "get_Item", 1);
+            var count = ReadManagerInt32(list, getCount);
+            var result = new List<VanillaHiredEmployeeSnapshot>(count);
+            unsafe
+            {
+                nint* arguments = stackalloc nint[1];
+                for (var index = 0; index < count; ++index)
+                {
+                    var itemIndex = index;
+                    arguments[0] = (nint)(&itemIndex);
+                    var boxed = _api.RuntimeInvoke(getItem, list, (nint)arguments);
+                    if (boxed == 0) continue;
+                    var employee = ReadHiredSnapshot(boxed);
+                    if (employee.IsFired ||
+                        idleOnly && employee.IsOnOffsiteContract) continue;
+                    result.Add(employee);
+                }
+            }
+            return result;
+        }
+
+        internal void AssignServer(string employeeId, string assignmentId)
+        {
+            var manager = RequireEmployeeManagerServer();
+            if (!TryGetHired(manager, employeeId, out var employee, out _))
+                throw new KeyNotFoundException(
+                    $"EmployeeManager has no employee '{employeeId}'.");
+            if (employee.IsFired || employee.IsOnOffsiteContract)
+                throw new InvalidOperationException(
+                    $"Employee '{employeeId}' is not available for assignment.");
+            InvokeStrings(_employeeManagerAssignOffsite, manager, employeeId, assignmentId);
+        }
+
+        internal void ReleaseServer(string employeeId)
+        {
+            var manager = RequireEmployeeManagerServer();
+            if (!TryGetHired(manager, employeeId, out _, out _))
+                throw new KeyNotFoundException(
+                    $"EmployeeManager has no employee '{employeeId}'.");
+            InvokeString(_employeeManagerReleaseOffsite, manager, employeeId);
+        }
+
         internal void FireServer(string qualifiedId)
         {
             var manager = RequireEmployeeManagerServer();
@@ -908,6 +997,18 @@ internal sealed class NpcApi(
         {
             nint* arguments = stackalloc nint[1];
             arguments[0] = _api.NewString(value);
+            _ = _api.RuntimeInvoke(method, instance, (nint)arguments);
+        }
+
+        private unsafe void InvokeStrings(
+            nint method,
+            nint instance,
+            string first,
+            string second)
+        {
+            nint* arguments = stackalloc nint[2];
+            arguments[0] = _api.NewString(first);
+            arguments[1] = _api.NewString(second);
             _ = _api.RuntimeInvoke(method, instance, (nint)arguments);
         }
 
