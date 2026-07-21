@@ -13,7 +13,8 @@ internal sealed class ModRuntimeInfo : IModRuntimeInfo
         new(StringComparer.OrdinalIgnoreCase)
         {
             "ac511ba1dd391bb6d7afdd70dde19b552244e194a7bfc6c0d1117a046047192f",
-            "8370257f4d60c7b8def58be8804d8724d76b95639baf4f199a7d54ef75d6e782"
+            "8370257f4d60c7b8def58be8804d8724d76b95639baf4f199a7d54ef75d6e782",
+            "6433f32e22ce153dd0c9ffc273631d546ff9edf320f80fb2c74723f41b235014"
         };
     private readonly Func<bool> _isMainThread;
 
