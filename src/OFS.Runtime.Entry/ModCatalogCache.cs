@@ -142,12 +142,23 @@ internal static class ModCatalogCache
                 .Append(officialKey)
                 .OrderBy(key => key.Id, StringComparer.Ordinal)
                 .ToArray();
-            await WriteAtomicJsonAsync(
-                trustPath,
-                existingTrust with { Keys = mergedKeys });
-            await WriteAtomicBytesAsync(
-                Path.Combine(frameworkRoot, "cache", "catalog.signed.json"),
-                bytes);
+            var matchingOfficialKeys = existingTrust.Keys
+                .Where(key => string.Equals(
+                    key.Id,
+                    OfficialCatalogIdentity.KeyId,
+                    StringComparison.Ordinal))
+                .ToArray();
+            if (matchingOfficialKeys.Length != 1 || matchingOfficialKeys[0] != officialKey)
+            {
+                await WriteAtomicJsonAsync(
+                    trustPath,
+                    existingTrust with { Keys = mergedKeys });
+            }
+            var cachePath = Path.Combine(frameworkRoot, "cache", "catalog.signed.json");
+            if (!await CachedOfficialPayloadMatchesAsync(cachePath, envelope, officialKey))
+            {
+                await WriteAtomicBytesAsync(cachePath, bytes);
+            }
             RuntimeLog.Write(
                 $"Official catalog refreshed: key={verification.KeyId}, " +
                 $"fingerprint={verification.KeyFingerprint}, versions={verification.Catalog.Mods.Count}.");
@@ -234,11 +245,84 @@ internal static class ModCatalogCache
                 FileOptions.Asynchronous | FileOptions.WriteThrough);
             await stream.WriteAsync(bytes);
             await stream.FlushAsync();
-            File.Move(temporary, path, overwrite: true);
+            const int maximumMoveAttempts = 6;
+            for (var attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    File.Move(temporary, path, overwrite: true);
+                    break;
+                }
+                catch (IOException) when (attempt + 1 < maximumMoveAttempts)
+                {
+                    if (await FileMatchesAsync(path, bytes)) break;
+                    await Task.Delay(TimeSpan.FromMilliseconds(25 * (1 << attempt)));
+                }
+            }
         }
         finally
         {
             if (File.Exists(temporary)) File.Delete(temporary);
+        }
+    }
+
+    private static async Task<bool> FileMatchesAsync(string path, ReadOnlyMemory<byte> expected)
+    {
+        try
+        {
+            if (!File.Exists(path) || new FileInfo(path).Length != expected.Length) return false;
+            await using var stream = new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete,
+                64 * 1024,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+            var offset = 0;
+            var buffer = new byte[Math.Min(64 * 1024, expected.Length)];
+            while (offset < expected.Length)
+            {
+                var read = await stream.ReadAsync(buffer.AsMemory(
+                    0,
+                    Math.Min(buffer.Length, expected.Length - offset)));
+                if (read == 0 || !buffer.AsSpan(0, read).SequenceEqual(expected.Span.Slice(offset, read)))
+                    return false;
+                offset += read;
+            }
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
+    private static async Task<bool> CachedOfficialPayloadMatchesAsync(
+        string path,
+        SignedModCatalog downloaded,
+        ModCatalogTrustKey officialKey)
+    {
+        try
+        {
+            if (!File.Exists(path) || new FileInfo(path).Length > MaximumCatalogBytes) return false;
+            await using var stream = new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete,
+                64 * 1024,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+            var cached = await JsonSerializer.DeserializeAsync<SignedModCatalog>(stream);
+            if (cached is null || !string.Equals(cached.Payload, downloaded.Payload, StringComparison.Ordinal))
+                return false;
+            var verification = ModCatalogSignatures.Verify(
+                cached,
+                new ModCatalogTrustStore { Keys = [officialKey] });
+            return verification.Success;
+        }
+        catch (Exception exception) when (exception is IOException or JsonException or CryptographicException)
+        {
+            return false;
         }
     }
 
