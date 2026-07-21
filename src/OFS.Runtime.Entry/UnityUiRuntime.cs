@@ -49,6 +49,7 @@ internal static partial class UnityUiRuntime
     private static readonly Dictionary<ModsView, nint> ViewTabObjects = new();
     private static readonly Dictionary<nint, Action> RowActions = new();
     private static readonly List<nint> InstalledView = new();
+    private static readonly List<nint> InstalledDetailView = new();
     private static readonly List<nint> InstalledCardRows = new();
     private static readonly List<nint> DiagnosticsView = new();
     private static readonly List<nint> BrowseView = new();
@@ -82,6 +83,13 @@ internal static partial class UnityUiRuntime
     private static nint _installedPreviousButton;
     private static nint _installedNextButton;
     private static int _installedPageIndex;
+    private static string? _selectedInstalledModId;
+    private static bool _confirmInstalledUninstall;
+    private static nint _installedDetailTitle;
+    private static nint _installedDetailInfo;
+    private static nint _installedDetailToggle;
+    private static nint _installedDetailUninstall;
+    private static nint _installedDetailBack;
     private static nint _diagnosticSummary;
     private static nint _diagnosticTitle;
     private static nint _diagnosticInfo;
@@ -198,7 +206,7 @@ internal static partial class UnityUiRuntime
             SetActive(tabs, false);
         }
         _headerLabel = FindDescendant(header, "Header_Text");
-        SetLabel(_headerLabel, "MODS - INSTALLED");
+        SetLabel(_headerLabel, "Mods");
         var closeObject = FindDescendant(header, "Close");
         _closeButton = GetComponent(closeObject, _buttonClass);
 
@@ -265,6 +273,7 @@ internal static partial class UnityUiRuntime
         ViewTabObjects.Clear();
         RowActions.Clear();
         InstalledView.Clear();
+        InstalledDetailView.Clear();
         InstalledCardRows.Clear();
         DiagnosticsView.Clear();
         BrowseView.Clear();
@@ -292,6 +301,13 @@ internal static partial class UnityUiRuntime
         _installedPreviousButton = 0;
         _installedNextButton = 0;
         _installedPageIndex = 0;
+        _selectedInstalledModId = null;
+        _confirmInstalledUninstall = false;
+        _installedDetailTitle = 0;
+        _installedDetailInfo = 0;
+        _installedDetailToggle = 0;
+        _installedDetailUninstall = 0;
+        _installedDetailBack = 0;
         _diagnosticSummary = 0;
         _diagnosticTitle = 0;
         _diagnosticInfo = 0;
@@ -1113,20 +1129,20 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             InstalledView,
             FormatFrameworkDiagnostics(),
-            new Vector2(0f, 205f),
-            new Vector2(760f, 58f),
+            new Vector2(0f, 215f),
+            new Vector2(920f, 54f),
             OpenRuntimeDiagnostics);
         StaticViewLabels[_frameworkDiagnosticsRow] = FormatFrameworkDiagnostics();
 
-        for (var index = 0; index < 2; ++index)
+        for (var index = 0; index < 4; ++index)
         {
             var cardIndex = index;
             var row = CreateActionButton(
                 _mainButtonTemplate,
                 InstalledView,
                 "INSTALLED MOD",
-                new Vector2(0f, 100f - index * 110f),
-                new Vector2(760f, 92f),
+                new Vector2(0f, 145f - index * 72f),
+                new Vector2(920f, 60f),
                 () => ActivateInstalledCard(cardIndex));
             InstalledCardRows.Add(row);
         }
@@ -1135,16 +1151,50 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             InstalledView,
             "PREVIOUS",
-            new Vector2(-205f, -145f),
-            new Vector2(350f, 62f),
+            new Vector2(-235f, -190f),
+            new Vector2(440f, 54f),
             () => MoveInstalledPage(-1));
         _installedNextButton = CreateActionButton(
             _mainButtonTemplate,
             InstalledView,
             "NEXT",
-            new Vector2(205f, -145f),
-            new Vector2(350f, 62f),
+            new Vector2(235f, -190f),
+            new Vector2(440f, 54f),
             () => MoveInstalledPage(1));
+
+        _installedDetailTitle = CreateActionButton(
+            _mainButtonTemplate,
+            InstalledDetailView,
+            "MOD DETAILS",
+            new Vector2(0f, 180f),
+            new Vector2(920f, 66f));
+        _installedDetailInfo = CreateActionButton(
+            _mainButtonTemplate,
+            InstalledDetailView,
+            "DETAILS",
+            new Vector2(0f, 55f),
+            new Vector2(920f, 150f));
+        _installedDetailToggle = CreateActionButton(
+            _mainButtonTemplate,
+            InstalledDetailView,
+            "DISABLE",
+            new Vector2(-235f, -70f),
+            new Vector2(440f, 58f),
+            ToggleSelectedInstalledMod);
+        _installedDetailUninstall = CreateActionButton(
+            _mainButtonTemplate,
+            InstalledDetailView,
+            "UNINSTALL",
+            new Vector2(235f, -70f),
+            new Vector2(440f, 58f),
+            UninstallSelectedMod);
+        _installedDetailBack = CreateActionButton(
+            _mainButtonTemplate,
+            InstalledDetailView,
+            "BACK TO INSTALLED MODS",
+            new Vector2(0f, -150f),
+            new Vector2(920f, 58f),
+            CloseInstalledDetail);
         RefreshInstalledModRows();
     }
 
@@ -1153,7 +1203,15 @@ internal static partial class UnityUiRuntime
         var installed = ModProfileStore.GetInstalledMods(ModRuntime.LoadedMods);
         var absoluteIndex = _installedPageIndex * InstalledCardRows.Count + cardIndex;
         if (absoluteIndex < 0 || absoluteIndex >= installed.Count) return;
-        var modId = installed[absoluteIndex].Manifest.Id;
+        _selectedInstalledModId = installed[absoluteIndex].Manifest.Id;
+        _confirmInstalledUninstall = false;
+        RefreshInstalledModRows();
+        RuntimeLog.Write($"Installed mod detail opened: {_selectedInstalledModId}.");
+    }
+
+    private static void ToggleSelectedInstalledMod()
+    {
+        if (_selectedInstalledModId is not { } modId) return;
         try
         {
             if (ModSafetyStore.IsQuarantined(modId))
@@ -1171,12 +1229,48 @@ internal static partial class UnityUiRuntime
                     $"affected={string.Join(',', change.AffectedIds)}, " +
                     $"restart={change.RestartRequired}.");
             }
+            _confirmInstalledUninstall = false;
             RefreshInstalledModRows();
         }
         catch (Exception exception)
         {
             RuntimeLog.Write($"Mod profile toggle failed for '{modId}': {exception}");
         }
+    }
+
+    private static void UninstallSelectedMod()
+    {
+        if (_selectedInstalledModId is not { } modId) return;
+        var installed = ModProfileStore.GetInstalledMods(ModRuntime.LoadedMods);
+        var mod = installed.FirstOrDefault(value =>
+            string.Equals(value.Manifest.Id, modId, StringComparison.OrdinalIgnoreCase));
+        if (mod is null || mod.UninstallOnRestart) return;
+        if (!_confirmInstalledUninstall)
+        {
+            _confirmInstalledUninstall = true;
+            RefreshInstalledModRows();
+            return;
+        }
+        try
+        {
+            PendingModInstaller.StageUninstall(modId);
+            _confirmInstalledUninstall = false;
+            RuntimeLog.Write($"Mod uninstall staged for restart: id={modId}.");
+            RefreshInstalledModRows();
+        }
+        catch (Exception exception)
+        {
+            _confirmInstalledUninstall = false;
+            RuntimeLog.Write($"Mod uninstall staging failed for '{modId}': {exception}");
+            RefreshInstalledModRows();
+        }
+    }
+
+    private static void CloseInstalledDetail()
+    {
+        _selectedInstalledModId = null;
+        _confirmInstalledUninstall = false;
+        RefreshInstalledModRows();
     }
 
     private static void MoveInstalledPage(int offset)
@@ -1206,8 +1300,8 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             BrowseView,
             "SEARCH: ALL",
-            new Vector2(0f, 205f),
-            new Vector2(760f, 58f),
+            new Vector2(0f, 215f),
+            new Vector2(920f, 54f),
             () =>
             {
                 _browseSearchFocused = !_browseSearchFocused;
@@ -1220,15 +1314,15 @@ internal static partial class UnityUiRuntime
                 RefreshBrowseView();
             });
 
-        for (var index = 0; index < 2; ++index)
+        for (var index = 0; index < 4; ++index)
         {
             var cardIndex = index;
             var row = CreateActionButton(
                 _mainButtonTemplate,
                 BrowseView,
                 "CATALOG ENTRY",
-                new Vector2(0f, 100f - index * 110f),
-                new Vector2(760f, 92f),
+                new Vector2(0f, 145f - index * 72f),
+                new Vector2(920f, 60f),
                 () => OpenBrowseCard(cardIndex));
             BrowseCardRows.Add(row);
             RegisterThumbnailTarget(row);
@@ -1238,8 +1332,8 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             BrowseView,
             "PREVIOUS",
-            new Vector2(-205f, -145f),
-            new Vector2(350f, 62f),
+            new Vector2(-235f, -190f),
+            new Vector2(440f, 54f),
             () =>
             {
                 _ = _catalogBrowser?.PreviousPage();
@@ -1250,8 +1344,8 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             BrowseView,
             "NEXT",
-            new Vector2(205f, -145f),
-            new Vector2(350f, 62f),
+            new Vector2(235f, -190f),
+            new Vector2(440f, 54f),
             () =>
             {
                 _ = _catalogBrowser?.NextPage();
@@ -1263,30 +1357,30 @@ internal static partial class UnityUiRuntime
             _mainButtonTemplate,
             BrowseDetailView,
             "MOD DETAILS",
-            new Vector2(0f, 165f),
-            new Vector2(760f, 70f),
+            new Vector2(0f, 180f),
+            new Vector2(920f, 66f),
             () => { });
         RegisterThumbnailTarget(_browseDetailTitle);
         _browseDetailInfo = CreateActionButton(
             _mainButtonTemplate,
             BrowseDetailView,
             "DETAILS",
-            new Vector2(0f, 35f),
-            new Vector2(760f, 160f),
+            new Vector2(0f, 55f),
+            new Vector2(920f, 150f),
             () => { });
         _browseDetailInstall = CreateActionButton(
             _mainButtonTemplate,
             BrowseDetailView,
             "INSTALL",
-            new Vector2(-205f, -145f),
-            new Vector2(350f, 62f),
+            new Vector2(-235f, -90f),
+            new Vector2(440f, 58f),
             InstallSelectedCatalogEntry);
         _browseDetailBack = CreateActionButton(
             _mainButtonTemplate,
             BrowseDetailView,
             "BACK TO RESULTS",
-            new Vector2(205f, -145f),
-            new Vector2(350f, 62f),
+            new Vector2(235f, -90f),
+            new Vector2(440f, 58f),
             () =>
             {
                 _catalogBrowser?.BackToResults();
@@ -1389,7 +1483,7 @@ internal static partial class UnityUiRuntime
         SetViewObjects(DiagnosticsView, false);
         SetViewObjects(InstalledView, _modsOpen && _currentView == ModsView.Installed);
         RefreshInstalledModRows();
-        SetLabel(_headerLabel, "MODS - INSTALLED");
+        SetLabel(_headerLabel, "Mods");
         RuntimeLog.Write("Runtime diagnostics view closed.");
     }
 
@@ -1705,10 +1799,10 @@ internal static partial class UnityUiRuntime
             : string.Join(", ", selected.Capabilities);
         SetLabel(
             _browseDetailInfo,
-            $"{CompactCatalogText(selected.Summary, 120)}\n" +
-            $"AUTHOR: {CompactCatalogText(selected.Author, 40).ToUpperInvariant()}\n" +
-            $"MULTIPLAYER: {selected.Multiplayer.ToUpperInvariant()}    SIZE: " +
-            $"{FormatBytes(selected.Package.Bytes)}\n" +
+            $"{CompactCatalogText(selected.Summary, 105)}\n" +
+            $"BY {CompactCatalogText(selected.Author, 35).ToUpperInvariant()}    " +
+            $"MULTIPLAYER: {selected.Multiplayer.ToUpperInvariant()}    " +
+            $"SIZE: {FormatBytes(selected.Package.Bytes)}\n" +
             $"DEPENDENCIES: {CompactCatalogText(dependencies, 90)}\n" +
             $"CAPABILITIES: {CompactCatalogText(capabilities, 110)}");
 
@@ -1717,6 +1811,9 @@ internal static partial class UnityUiRuntime
             ? installState
             : installed ? "INSTALLED" : "INSTALL";
         SetLabel(_browseDetailInstall, state);
+        SetButtonColor(
+            _browseDetailInstall,
+            installed ? NeutralButtonColor : AccentButtonColor);
         SetLabel(_browseDetailBack, "BACK TO RESULTS");
         SetActive(_browseDetailInstall, showDetail);
         SetActive(_browseDetailBack, showDetail);
@@ -1889,6 +1986,19 @@ internal static partial class UnityUiRuntime
         InvokeVoidWithColor(RequireMethod(_imageClass, "set_color", 1), image, color);
     }
 
+    private static readonly Color AccentButtonColor = new(0.68f, 0.44f, 0.24f, 1f);
+    private static readonly Color NeutralButtonColor = new(0.32f, 0.32f, 0.32f, 1f);
+    private static readonly Color WarningButtonColor = new(0.66f, 0.25f, 0.20f, 1f);
+
+    private static void SetButtonColor(nint gameObject, Color color)
+    {
+        var image = TryGetComponent(gameObject, _imageClass);
+        if (image != 0)
+        {
+            InvokeVoidWithColor(RequireMethod(_imageClass, "set_color", 1), image, color);
+        }
+    }
+
     private static nint FindFirstDescendantWithComponent(nint parent, nint componentClass)
     {
         foreach (var child in GetDirectChildren(GetTransform(parent)))
@@ -1927,9 +2037,7 @@ internal static partial class UnityUiRuntime
         var state = BrowseInstallStates.TryGetValue(entry.Id, out var installState)
             ? installState
             : BrowseInstalledIds.Contains(entry.Id) ? "INSTALLED" : "AVAILABLE";
-        return $"{entry.Name.ToUpperInvariant()}  v{entry.Version}    [{state}]\n" +
-               $"{CompactCatalogText(entry.Summary, 90)}\n" +
-               $"BY {CompactCatalogText(entry.Author, 35).ToUpperInvariant()}    SELECT FOR DETAILS";
+        return $"{entry.Name.ToUpperInvariant()}    v{entry.Version}    [{state}]";
     }
 
     private static string CompactCatalogText(string? value, int maximumLength)
@@ -1997,6 +2105,7 @@ internal static partial class UnityUiRuntime
             _browseSearchFocused = false;
         }
         SetViewObjects(InstalledView, view == ModsView.Installed);
+        SetViewObjects(InstalledDetailView, false);
         SetViewObjects(DiagnosticsView, false);
         RefreshBrowseView();
         SetViewObjects(SettingsView, view == ModsView.Settings);
@@ -2015,8 +2124,11 @@ internal static partial class UnityUiRuntime
         foreach (var tab in ViewTabObjects)
         {
             SetLabel(tab.Value, tab.Key.ToString().ToUpperInvariant());
+            SetButtonColor(
+                tab.Value,
+                tab.Key == view ? AccentButtonColor : NeutralButtonColor);
         }
-        SetLabel(_headerLabel, $"MODS - {view.ToString().ToUpperInvariant()}");
+        SetLabel(_headerLabel, "Mods");
     }
 
     private static void RefreshInstalledModRows()
@@ -2027,7 +2139,21 @@ internal static partial class UnityUiRuntime
         var pageCount = Math.Max(1, (installed.Count + pageSize - 1) / pageSize);
         _installedPageIndex = Math.Clamp(_installedPageIndex, 0, pageCount - 1);
         var page = installed.Skip(_installedPageIndex * pageSize).Take(pageSize).ToArray();
-        var visible = _modsOpen && _currentView == ModsView.Installed && !_diagnosticsOpen;
+        var selected = _selectedInstalledModId is null
+            ? null
+            : installed.FirstOrDefault(mod => string.Equals(
+                mod.Manifest.Id,
+                _selectedInstalledModId,
+                StringComparison.OrdinalIgnoreCase));
+        if (_selectedInstalledModId is not null && selected is null)
+        {
+            _selectedInstalledModId = null;
+            _confirmInstalledUninstall = false;
+        }
+        var visible = _modsOpen && _currentView == ModsView.Installed &&
+                      !_diagnosticsOpen && _selectedInstalledModId is null;
+        var detailVisible = _modsOpen && _currentView == ModsView.Installed &&
+                            !_diagnosticsOpen && selected is not null;
         SetLabel(_frameworkDiagnosticsRow, FormatFrameworkDiagnostics());
         for (var index = 0; index < InstalledCardRows.Count; ++index)
         {
@@ -2051,6 +2177,40 @@ internal static partial class UnityUiRuntime
             _installedPageIndex + 1 < pageCount ? "NEXT PAGE" : "LAST PAGE");
         SetActive(_installedPreviousButton, visible && multiplePages);
         SetActive(_installedNextButton, visible && multiplePages);
+        SetViewObjects(InstalledDetailView, detailVisible);
+        if (selected is not null)
+        {
+            RefreshInstalledDetail(selected);
+        }
+    }
+
+    private static void RefreshInstalledDetail(InstalledModState mod)
+    {
+        var manifestPath = Path.GetFullPath(Path.Combine(mod.Directory, "manifest.json"));
+        var diagnostic = ModDiagnosticsRuntime.CurrentReport?.Mods.FirstOrDefault(value =>
+            string.Equals(value.ManifestPath, manifestPath, StringComparison.OrdinalIgnoreCase));
+        var dependencies = mod.Manifest.Dependencies.Count == 0
+            ? "NONE"
+            : string.Join(", ", mod.Manifest.Dependencies.Select(value => value.Id));
+        SetLabel(_installedDetailTitle,
+            $"{mod.Manifest.Name.ToUpperInvariant()}    v{mod.Manifest.Version}");
+        SetLabel(_installedDetailInfo,
+            $"STATUS: {FormatInstalledStatus(mod, diagnostic)}    ID: {mod.Manifest.Id}\n" +
+            $"AUTHOR: {CompactCatalogText(mod.Manifest.Author, 50).ToUpperInvariant()}\n" +
+            $"DEPENDENCIES: {CompactCatalogText(dependencies, 90)}\n" +
+            "CHANGES ARE APPLIED AFTER RESTART");
+        var toggle = mod.Quarantined
+            ? "CLEAR QUARANTINE"
+            : mod.DesiredEnabled ? "DISABLE ON RESTART" : "ENABLE ON RESTART";
+        SetLabel(_installedDetailToggle, toggle);
+        SetLabel(_installedDetailUninstall, mod.UninstallOnRestart
+            ? "UNINSTALL ON RESTART"
+            : _confirmInstalledUninstall ? "CONFIRM UNINSTALL" : "UNINSTALL");
+        SetButtonColor(_installedDetailToggle, AccentButtonColor);
+        SetButtonColor(
+            _installedDetailUninstall,
+            _confirmInstalledUninstall ? WarningButtonColor : NeutralButtonColor);
+        SetLabel(_installedDetailBack, "BACK TO INSTALLED MODS");
     }
 
     private static string FormatInstalledMod(InstalledModState mod)
@@ -2058,28 +2218,24 @@ internal static partial class UnityUiRuntime
         var manifestPath = Path.GetFullPath(Path.Combine(mod.Directory, "manifest.json"));
         var diagnostic = ModDiagnosticsRuntime.CurrentReport?.Mods.FirstOrDefault(value =>
             string.Equals(value.ManifestPath, manifestPath, StringComparison.OrdinalIgnoreCase));
-        var state = mod.Quarantined
-            ? "QUARANTINED - SELECT TO CLEAR"
-            : mod.RetryOnRestart
-                ? "RESTART TO RETRY"
-                : mod.ActiveEnabled != mod.DesiredEnabled
-            ? mod.DesiredEnabled ? "ENABLE ON RESTART" : "DISABLE ON RESTART"
-            : mod.Loaded
-                ? "LOADED"
-                : mod.ActiveEnabled
-                    ? diagnostic?.Status == ModStartupStatus.Failed
-                        ? "FAILED - SELECT TO DISABLE"
-                        : "BLOCKED - SELECT TO DISABLE"
-                    : "DISABLED";
-        var label = $"{mod.Manifest.Name.ToUpperInvariant()}  v{mod.Manifest.Version}    [{state}]";
-        if (diagnostic?.Status is ModStartupStatus.Quarantined or ModStartupStatus.Blocked or
-            ModStartupStatus.Failed or ModStartupStatus.Rejected)
+        return $"{mod.Manifest.Name.ToUpperInvariant()}    v{mod.Manifest.Version}    " +
+               $"[{FormatInstalledStatus(mod, diagnostic)}]";
+    }
+
+    private static string FormatInstalledStatus(
+        InstalledModState mod,
+        RuntimeModDiagnostic? diagnostic)
+    {
+        if (mod.UninstallOnRestart) return "UNINSTALL ON RESTART";
+        if (mod.Quarantined) return "QUARANTINED";
+        if (mod.RetryOnRestart) return "RETRY ON RESTART";
+        if (mod.ActiveEnabled != mod.DesiredEnabled)
         {
-            label += $"\n{diagnostic.Status.ToString().ToUpperInvariant()}/" +
-                     $"{CompactCatalogText(diagnostic.Phase, 35).ToUpperInvariant()}: " +
-                     CompactCatalogText(diagnostic.Message, 105);
+            return mod.DesiredEnabled ? "ENABLE ON RESTART" : "DISABLE ON RESTART";
         }
-        return label;
+        if (mod.Loaded) return "ENABLED";
+        if (!mod.ActiveEnabled) return "DISABLED";
+        return diagnostic?.Status == ModStartupStatus.Failed ? "FAILED" : "BLOCKED";
     }
 
     private static void SetViewObjects(IEnumerable<nint> objects, bool active)

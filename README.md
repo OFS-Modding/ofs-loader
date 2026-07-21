@@ -55,6 +55,9 @@ requires explicit maintainer authorization.
 `bootstrap install` provisions the official public key and refreshes the signed
 catalog automatically. Opening the in-game Mod Hub retries the refresh, so a
 temporary network failure during installation does not require a repair step.
+The Mod Hub lists installed and catalog mods in separate views. Package
+installation, enable/disable changes, and confirmed uninstallation are staged
+safely in-game and applied before mod discovery on the next restart.
 
 The official endpoint is
 `https://ofs-modding.github.io/ofs-mod-catalog/catalog.signed.json`. Downloads

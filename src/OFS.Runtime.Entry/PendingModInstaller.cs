@@ -14,6 +14,7 @@ internal static class PendingModInstaller
     public static void Apply(string gameDirectory)
     {
         var frameworkRoot = Path.Combine(gameDirectory, "OFS");
+        ApplyPendingRemovals(frameworkRoot);
         var pendingRoot = Path.Combine(frameworkRoot, "pending", "mods");
         if (!Directory.Exists(pendingRoot)) return;
 
@@ -48,6 +49,71 @@ internal static class PendingModInstaller
             catch (Exception exception)
             {
                 RuntimeLog.Write($"Pending mod activation failed for '{pending}': {exception}");
+            }
+        }
+    }
+
+    public static void StageUninstall(string modId)
+    {
+        var gameDirectory = Path.GetDirectoryName(Environment.ProcessPath)
+            ?? throw new InvalidOperationException("Game process directory is unavailable.");
+        StageUninstall(gameDirectory, modId);
+    }
+
+    internal static void StageUninstall(string gameDirectory, string modId)
+    {
+        if (!ModManifestValidator.IsValidId(modId))
+        {
+            throw new InvalidDataException($"Invalid mod id '{modId}'.");
+        }
+
+        _ = ModProfileStore.Disable(modId);
+        var removalRoot = Path.Combine(gameDirectory, "OFS", "pending", "removals");
+        Directory.CreateDirectory(removalRoot);
+        var marker = ResolveContainedPath(removalRoot, modId + ".remove");
+        File.WriteAllText(marker, modId);
+    }
+
+    public static bool IsUninstallPending(string gameDirectory, string modId)
+    {
+        if (!ModManifestValidator.IsValidId(modId)) return false;
+        var removalRoot = Path.Combine(gameDirectory, "OFS", "pending", "removals");
+        return File.Exists(ResolveContainedPath(removalRoot, modId + ".remove"));
+    }
+
+    private static void ApplyPendingRemovals(string frameworkRoot)
+    {
+        var removalRoot = Path.Combine(frameworkRoot, "pending", "removals");
+        if (!Directory.Exists(removalRoot)) return;
+
+        var modsRoot = Path.Combine(frameworkRoot, "mods");
+        var stagingRoot = Path.Combine(frameworkRoot, ".staging");
+        Directory.CreateDirectory(modsRoot);
+        Directory.CreateDirectory(stagingRoot);
+        foreach (var marker in Directory.EnumerateFiles(removalRoot, "*.remove"))
+        {
+            try
+            {
+                var modId = File.ReadAllText(marker).Trim();
+                if (!ModManifestValidator.IsValidId(modId) ||
+                    !string.Equals(Path.GetFileNameWithoutExtension(marker), modId,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidDataException("Pending removal marker is invalid.");
+                }
+                var target = ResolveContainedPath(modsRoot, modId);
+                if (Directory.Exists(target))
+                {
+                    var tombstone = Path.Combine(stagingRoot, $"remove-{Guid.NewGuid():N}");
+                    Directory.Move(target, tombstone);
+                    Directory.Delete(tombstone, recursive: true);
+                }
+                File.Delete(marker);
+                RuntimeLog.Write($"Uninstalled pending mod '{modId}'.");
+            }
+            catch (Exception exception)
+            {
+                RuntimeLog.Write($"Pending mod removal failed for '{marker}': {exception}");
             }
         }
     }

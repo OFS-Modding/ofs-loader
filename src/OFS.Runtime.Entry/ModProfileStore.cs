@@ -10,7 +10,8 @@ internal sealed record InstalledModState(
     bool DesiredEnabled,
     bool Loaded,
     bool Quarantined,
-    bool RetryOnRestart);
+    bool RetryOnRestart,
+    bool UninstallOnRestart);
 
 internal sealed record ModProfileChange(
     string ModId,
@@ -90,7 +91,8 @@ internal static class ModProfileStore
                     desired.Contains(mod.Manifest.Id),
                     loaded.Contains(mod.Manifest.Id),
                     ModSafetyStore.IsQuarantined(mod.Manifest.Id),
-                    ModSafetyStore.WasClearedThisSession(mod.Manifest.Id)))
+                    ModSafetyStore.WasClearedThisSession(mod.Manifest.Id),
+                    PendingModInstaller.IsUninstallPending(_gameDirectory!, mod.Manifest.Id)))
                 .ToArray();
         }
     }
@@ -105,40 +107,67 @@ internal static class ModProfileStore
             {
                 throw new InvalidOperationException($"Installed mod '{modId}' was not found.");
             }
+            var active = EffectiveActive(installed);
+            var desired = new HashSet<string>(
+                _pendingEnabled ?? active,
+                StringComparer.OrdinalIgnoreCase);
+            return SetDesiredState(installed, active, desired, modId, !desired.Contains(modId));
+        }
+    }
+
+    public static ModProfileChange Disable(string modId)
+    {
+        lock (Gate)
+        {
+            EnsureInitialized();
+            var installed = DiscoverInstalled();
+            if (!installed.ContainsKey(modId))
+            {
+                throw new InvalidOperationException($"Installed mod '{modId}' was not found.");
+            }
 
             var active = EffectiveActive(installed);
             var desired = new HashSet<string>(
                 _pendingEnabled ?? active,
                 StringComparer.OrdinalIgnoreCase);
-            var enable = !desired.Contains(modId);
-            var resolution = enable
-                ? ModProfileResolver.Enable(
-                    installed.Values.Select(mod => mod.Manifest), desired, modId)
-                : ModProfileResolver.Disable(
-                    installed.Values.Select(mod => mod.Manifest), desired, modId);
-            if (!resolution.Success)
-            {
-                throw new InvalidOperationException(string.Join(" ", resolution.Errors));
-            }
-            desired = resolution.EnabledIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            if (desired.SetEquals(active))
-            {
-                _pendingEnabled = null;
-                if (File.Exists(_pendingPath!)) File.Delete(_pendingPath!);
-            }
-            else
-            {
-                WriteProfile(_pendingPath!, desired);
-                _pendingEnabled = desired;
-            }
-
-            return new ModProfileChange(
-                modId,
-                enable,
-                resolution.AffectedIds,
-                !desired.SetEquals(active));
+            return SetDesiredState(installed, active, desired, modId, enabled: false);
         }
+    }
+
+    private static ModProfileChange SetDesiredState(
+        IReadOnlyDictionary<string, DiscoveredManifest> installed,
+        HashSet<string> active,
+        HashSet<string> desired,
+        string modId,
+        bool enabled)
+    {
+        var resolution = enabled
+            ? ModProfileResolver.Enable(
+                installed.Values.Select(mod => mod.Manifest), desired, modId)
+            : ModProfileResolver.Disable(
+                installed.Values.Select(mod => mod.Manifest), desired, modId);
+        if (!resolution.Success)
+        {
+            throw new InvalidOperationException(string.Join(" ", resolution.Errors));
+        }
+        desired = resolution.EnabledIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (desired.SetEquals(active))
+        {
+            _pendingEnabled = null;
+            if (File.Exists(_pendingPath!)) File.Delete(_pendingPath!);
+        }
+        else
+        {
+            WriteProfile(_pendingPath!, desired);
+            _pendingEnabled = desired;
+        }
+
+        return new ModProfileChange(
+            modId,
+            enabled,
+            resolution.AffectedIds,
+            !desired.SetEquals(active));
     }
 
     public static void StageEnableWithDependencies(string modId)

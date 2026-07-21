@@ -33,7 +33,7 @@ internal static class ModSafetyManager
         GameInstallation installation,
         string modId)
     {
-        EnsureGameClosed();
+        EnsureGameClosed(installation);
         ArgumentException.ThrowIfNullOrWhiteSpace(modId);
         var paths = GetPaths(installation);
         var clearAll = string.Equals(modId, "--all", StringComparison.OrdinalIgnoreCase);
@@ -203,11 +203,36 @@ internal static class ModSafetyManager
         }
     }
 
-    private static void EnsureGameClosed()
+    private static void EnsureGameClosed(GameInstallation installation)
     {
-        if (Process.GetProcessesByName("Ore Factory Squad").Length != 0)
+        var targetDirectory = Path.TrimEndingDirectorySeparator(
+            Path.GetFullPath(installation.GameDirectory));
+        foreach (var process in Process.GetProcessesByName("Ore Factory Squad"))
         {
-            throw new IOException("Close Ore Factory Squad before changing quarantine state.");
+            using (process)
+            {
+                try
+                {
+                    var executable = process.MainModule?.FileName;
+                    if (executable is null) continue;
+                    var processDirectory = Path.TrimEndingDirectorySeparator(
+                        Path.GetFullPath(Path.GetDirectoryName(executable)!));
+                    if (string.Equals(
+                            processDirectory,
+                            targetDirectory,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new IOException(
+                            "Close Ore Factory Squad before changing quarantine state.");
+                    }
+                }
+                catch (System.ComponentModel.Win32Exception)
+                {
+                    throw new IOException(
+                        "Could not verify whether Ore Factory Squad is using this installation. " +
+                        "Close the game before changing quarantine state.");
+                }
+            }
         }
     }
 

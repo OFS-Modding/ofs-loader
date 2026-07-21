@@ -2409,6 +2409,24 @@ try
         ["test.future-package"]);
     Assert(!File.Exists(pendingProfilePath),
         "Resolved profile equal to implicit active state left a restart marker.");
+
+    PendingModInstaller.StageUninstall(resolvedProfileRoot, "test.profile-a");
+    Assert(PendingModInstaller.IsUninstallPending(resolvedProfileRoot, "test.profile-a"),
+        "Runtime uninstall did not create a pending removal marker.");
+    using (var pendingDocument = JsonDocument.Parse(File.ReadAllText(pendingProfilePath)))
+    {
+        var pendingIds = pendingDocument.RootElement.GetProperty("enabled")
+            .EnumerateArray()
+            .Select(value => value.GetString())
+            .ToArray();
+        Assert(pendingIds.SequenceEqual(["test.profile-b"]),
+            "Runtime uninstall did not disable the selected mod.");
+    }
+    PendingModInstaller.Apply(resolvedProfileRoot);
+    Assert(!Directory.Exists(Path.Combine(
+               resolvedProfileRoot, "OFS", "mods", "test.profile-a")) &&
+           !PendingModInstaller.IsUninstallPending(resolvedProfileRoot, "test.profile-a"),
+        "Pending runtime uninstall was not applied atomically on restart.");
 }
 finally
 {
