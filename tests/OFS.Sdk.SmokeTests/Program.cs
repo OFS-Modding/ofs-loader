@@ -1822,6 +1822,9 @@ Assert(!new VanillaEmployeeSnapshot(
     "Uninitialized vanilla employee snapshot was reported as initialized.");
 Assert(!typeof(INpcApi).GetMethod(nameof(INpcApi.FindVanillaEmployees))!.IsAbstract &&
        !typeof(INpcApi).GetMethod(nameof(INpcApi.TryGetVanillaEmployee))!.IsAbstract &&
+       !typeof(INpcApi).GetMethod(nameof(INpcApi.FindHiredVanillaEmployees))!.IsAbstract &&
+       !typeof(INpcApi).GetMethod(nameof(INpcApi.AssignHiredVanillaEmployeeServer))!.IsAbstract &&
+       !typeof(INpcApi).GetMethod(nameof(INpcApi.ReleaseHiredVanillaEmployeeServer))!.IsAbstract &&
        !typeof(INpcApi).GetMethod(nameof(INpcApi.HireVanillaEmployeeServer))!.IsAbstract &&
        !typeof(INpcApi).GetMethod(nameof(INpcApi.TryGetHiredVanillaEmployee))!.IsAbstract &&
        !typeof(INpcApi).GetMethod(nameof(INpcApi.FireVanillaEmployeeServer))!.IsAbstract &&
@@ -1847,7 +1850,8 @@ Assert(!typeof(INpcApi).GetMethod(nameof(INpcApi.FindVanillaEmployees))!.IsAbstr
        !typeof(IMenuPanel).GetMethod(nameof(IMenuPanel.RemoveControl))!.IsAbstract &&
        !typeof(IMenuPanel).GetMethod(nameof(IMenuPanel.Clear))!.IsAbstract &&
        !typeof(INetworkApi).GetProperty(nameof(INetworkApi.LastRemediationPlan))!.GetMethod!.IsAbstract &&
-       !typeof(IModContext).GetProperty(nameof(IModContext.GameplayUi))!.GetMethod!.IsAbstract,
+       !typeof(IModContext).GetProperty(nameof(IModContext.GameplayUi))!.GetMethod!.IsAbstract &&
+       !typeof(IGameplayUiApi).GetMethod(nameof(IGameplayUiApi.RegisterComputerApp))!.IsAbstract,
     "New component/employee/menu/gameplay UI API members lost their backward-compatible default bodies.");
 var referenceArgument = Il2CppArgument.FromReference((nint)0x1234);
 var intArgument = Il2CppArgument.FromInt32(unchecked((int)0x78563412));
@@ -1927,18 +1931,27 @@ var gameplayButtonDefinition = new GameplayPanelButtonDefinition(
     "ACCEPT",
     () => gameplayButtonInvoked = true,
     ClosePanel: true);
+var computerAppInvoked = false;
+var computerAppDefinition = new ComputerAppDefinition(
+    "dispatch",
+    "DISPATCH",
+    () => computerAppInvoked = true,
+    Visible: false);
 Assert(gameplayHudDefinition.Anchor == GameplayUiAnchor.BottomLeft &&
        gameplayHudDefinition.OffsetX == 24f &&
        gameplayHudDefinition.OffsetY == 32f &&
        !gameplayHudDefinition.Visible &&
        gameplayPanelDefinition.Closed is not null &&
-       gameplayButtonDefinition.ClosePanel,
+       gameplayButtonDefinition.ClosePanel &&
+       computerAppDefinition.Label == "DISPATCH" &&
+       !computerAppDefinition.Visible,
     "Gameplay UI contracts did not preserve values or defaults.");
 gameplayPanelDefinition.Closed!(new GameplayPanelClosedEvent(
     null!,
     GameplayPanelCloseReason.UserCancelled));
 gameplayButtonDefinition.OnPressed();
-Assert(gameplayPanelClosed && gameplayButtonInvoked,
+computerAppDefinition.OnPressed();
+Assert(gameplayPanelClosed && gameplayButtonInvoked && computerAppInvoked,
     "Gameplay UI callbacks were not retained by their contract records.");
 Assert(Enum.GetValues<GameplayUiAnchor>().Length == 4 &&
        Enum.GetValues<GameplayPanelCloseReason>().Length == 7,

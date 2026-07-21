@@ -91,6 +91,8 @@ internal sealed class GameplayUiApi : IGameplayUiApi
         new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, GameplayPanel> _panels =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ComputerAppRegistration> _computerApps =
+        new(StringComparer.OrdinalIgnoreCase);
     private int _labelRefreshCountdown;
 
     internal GameplayUiApi(
@@ -159,12 +161,37 @@ internal sealed class GameplayUiApi : IGameplayUiApi
         return handle;
     }
 
+    public IComputerAppRegistration RegisterComputerApp(ComputerAppDefinition definition)
+    {
+        EnsureMainThread();
+        ArgumentNullException.ThrowIfNull(definition);
+        GameplayUiValidation.ValidateId(definition.Id, "Computer app");
+        GameplayUiValidation.ValidateText(
+            definition.Label, "Computer app label", 100, allowEmpty: false);
+        ArgumentNullException.ThrowIfNull(definition.OnPressed);
+        if (_computerApps.ContainsKey(definition.Id))
+            throw new InvalidOperationException(
+                $"Computer app id '{definition.Id}' is already registered.");
+        var handle = new ComputerAppRegistration(
+            _ownerId,
+            definition,
+            _api,
+            GameplayUiRuntime.FactorySceneHandle,
+            () => _computerApps.Remove(definition.Id));
+        _computerApps.Add(definition.Id, handle);
+        handle.TryMaterialize();
+        _logger.Info($"Registered factory computer app '{_ownerId}:{definition.Id}'.");
+        return handle;
+    }
+
     internal void RemoveAll()
     {
         foreach (var panel in _panels.Values.ToArray()) panel.Remove();
         foreach (var hud in _huds.Values.ToArray()) hud.Remove();
+        foreach (var app in _computerApps.Values.ToArray()) app.Remove();
         _panels.Clear();
         _huds.Clear();
+        _computerApps.Clear();
     }
 
     private void OnSceneUnloaded(SceneEvent scene)
@@ -177,6 +204,10 @@ internal sealed class GameplayUiApi : IGameplayUiApi
                      .Where(value => value.SceneHandle == scene.Handle)
                      .ToArray())
             hud.Remove();
+        foreach (var app in _computerApps.Values
+                     .Where(value => value.SceneHandle == scene.Handle)
+                     .ToArray())
+            app.Remove();
     }
 
     private void OnFrameUpdate(FrameEvent _)
@@ -185,6 +216,11 @@ internal sealed class GameplayUiApi : IGameplayUiApi
         _labelRefreshCountdown = 15;
         foreach (var hud in _huds.Values) hud.RefreshLabels();
         foreach (var panel in _panels.Values) panel.RefreshLabels();
+        foreach (var app in _computerApps.Values)
+        {
+            app.TryMaterialize();
+            app.Refresh();
+        }
     }
 
     private void EnsureAvailable()
@@ -198,6 +234,129 @@ internal sealed class GameplayUiApi : IGameplayUiApi
     {
         if (!ModRuntime.IsMainThread)
             throw new InvalidOperationException("Gameplay UI must be used on Unity's main thread.");
+    }
+}
+
+internal sealed class ComputerAppRegistration : IComputerAppRegistration
+{
+    private readonly IUnsafeIl2CppApi _api;
+    private readonly Action _onPressed;
+    private readonly Action _onRemove;
+    private nint _root;
+    private nint _button;
+    private string _label;
+    private bool _visible;
+    private bool _removed;
+
+    internal ComputerAppRegistration(
+        string ownerId,
+        ComputerAppDefinition definition,
+        IUnsafeIl2CppApi api,
+        int sceneHandle,
+        Action onRemove)
+    {
+        OwnerId = ownerId;
+        Id = definition.Id;
+        _label = definition.Label;
+        _visible = definition.Visible;
+        _onPressed = definition.OnPressed;
+        _api = api;
+        SceneHandle = sceneHandle;
+        _onRemove = onRemove;
+    }
+
+    internal int SceneHandle { get; }
+    public string Id { get; }
+    public string OwnerId { get; }
+    public bool IsMaterialized => _root != 0;
+    public bool IsAlive => !_removed && GameplayUiRuntime.IsSceneActive(SceneHandle);
+
+    public string Label
+    {
+        get => _label;
+        set
+        {
+            EnsureAlive();
+            GameplayUiValidation.ValidateText(value, "Computer app label", 100, allowEmpty: false);
+            _label = value;
+            Refresh();
+        }
+    }
+
+    public bool Visible
+    {
+        get => _visible;
+        set
+        {
+            EnsureAlive();
+            _visible = value;
+            Refresh();
+        }
+    }
+
+    internal void TryMaterialize()
+    {
+        if (!IsAlive || _root != 0) return;
+        var controllerClass = _api.FindClass(
+            "Assembly-CSharp.dll", string.Empty, "ComputerAppButtonController");
+        if (controllerClass == 0) return;
+        var templateController = UnityUiRuntime.FindActiveLoadedComponentPointer(
+            controllerClass, _api);
+        if (templateController == 0) return;
+        var templateRoot = UnityUiRuntime.GetGameObjectForSdk(templateController);
+        if (templateRoot == 0) return;
+
+        var clone = UnityUiRuntime.CloneSiblingPointer(templateRoot);
+        try
+        {
+            var cloneController = UnityUiRuntime.TryGetComponentPointer(clone, controllerClass);
+            if (cloneController == 0)
+                throw new InvalidOperationException(
+                    "The cloned computer app button has no controller component.");
+            var buttonField = _api.FindField(controllerClass, "button");
+            var button = buttonField == 0
+                ? 0
+                : _api.ReadObjectReference(cloneController, buttonField);
+            if (button == 0) button = UnityUiRuntime.GetButtonPointer(clone);
+            _root = clone;
+            _button = button;
+            UnityUiRuntime.SetObjectNameForSdk(
+                clone, $"OFS Computer App ({OwnerId}:{Id})");
+            UnityUiRuntime.RegisterFrameworkButton(_button, _onPressed);
+            Refresh();
+        }
+        catch
+        {
+            UnityUiRuntime.DestroyForSdk(clone);
+            throw;
+        }
+    }
+
+    internal void Refresh()
+    {
+        if (!IsAlive || _root == 0) return;
+        UnityUiRuntime.SetLabelForSdk(_root, _label);
+        UnityUiRuntime.SetActiveForSdk(_root, _visible);
+    }
+
+    public void Remove()
+    {
+        if (_removed) return;
+        var alive = IsAlive;
+        _removed = true;
+        _onRemove();
+        if (_button != 0) UnityUiRuntime.UnregisterFrameworkButton(_button);
+        if (alive && _root != 0) UnityUiRuntime.DestroyForSdk(_root);
+        _button = 0;
+        _root = 0;
+    }
+
+    public void Dispose() => Remove();
+
+    private void EnsureAlive()
+    {
+        if (!IsAlive)
+            throw new ObjectDisposedException(Id, "The factory computer app is no longer alive.");
     }
 }
 
